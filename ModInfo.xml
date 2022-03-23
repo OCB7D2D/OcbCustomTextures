@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<xml>
+	<ModInfo>
+		<Name value="OcbCustomTextures" />
+		<Description value="Core mod to allow other mods to add paint and terrain textures to the atlas." />
+		<Website value="https://github.com/OCB7D2D/OcbCustomTextures" />
+		<Author value="ocbMaurice" />
+		<Version value="0.1.0" compat="A20"/>
+	</ModInfo>
+</xml>

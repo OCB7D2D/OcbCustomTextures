@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.32002.261
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{6DC39BF8-AF82-4564-84C2-480D8F2960D2}") = "CustomTextures", "CustomTextures.csproj", "{0F0232D3-7814-48BF-A2AC-070A5D8D2AF2}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{0F0232D3-7814-48BF-A2AC-070A5D8D2AF2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0F0232D3-7814-48BF-A2AC-070A5D8D2AF2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0F0232D3-7814-48BF-A2AC-070A5D8D2AF2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0F0232D3-7814-48BF-A2AC-070A5D8D2AF2}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {E79DBE3B-57CB-489E-8177-41E64701E386}
+	EndGlobalSection
+EndGlobal
