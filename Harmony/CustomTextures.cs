@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine.Experimental.Rendering;
+using OCB;
 
 public class OcbCustomTextures : IModApi
 {
@@ -53,6 +54,8 @@ public class OcbCustomTextures : IModApi
             tiling.uv.height = xml.HasAttribute("h") ? float.Parse(xml.GetAttribute("h")) : 1;
             tiling.blockW = xml.HasAttribute("blockw") ? int.Parse(xml.GetAttribute("blockw")) : 1;
             tiling.blockH = xml.HasAttribute("blockh") ? int.Parse(xml.GetAttribute("blockh")) : 1;
+
+            // tiling.textureName = xml.HasAttribute("name") ? xml.GetAttribute("name") : "";
 
             tiling.color = !props.Contains("Color") ? Color.white :
                  StringParsers.ParseColor(props.GetString("Color"));
@@ -122,102 +125,150 @@ public class OcbCustomTextures : IModApi
         System.IO.Directory.CreateDirectory("export");
         System.IO.Directory.CreateDirectory("export/" + name);
 
-        if (_ta.diffuseTexture is Texture2DArray arr)
+        if (_ta.diffuseTexture is Texture2DArray diff)
         {
-            for (; DumpedDiffuse < arr.depth; DumpedDiffuse++)
+            for (; DumpedDiffuse < diff.depth; DumpedDiffuse++)
             {
-                Texture2D tex = new Texture2D(arr.width, arr.height, TextureFormat.RGB24, false);
-                tex.SetPixels32(arr.GetPixels32(DumpedDiffuse));
-                byte[] bytes = tex.EncodeToPNG();
-                System.IO.File.WriteAllBytes(String.Format(
-                    "export/{0}/{1}.diffuse.png",
-                    name, DumpedDiffuse), bytes);
+                TexUtils.DumpTexure(diff, DumpedDiffuse, String.Format(
+                    "export/{0}/{1}.diffuse.png", name, DumpedDiffuse));
             }
         }
         else if (_ta.diffuseTexture is Texture2D tex2d)
         {
-            Texture2D tex = new Texture2D(tex2d.width, tex2d.height, TextureFormat.RGB24, false);
-            tex.SetPixels32(tex2d.GetPixels32(DumpedDiffuse));
-            byte[] bytes = tex.EncodeToPNG();
-            System.IO.File.WriteAllBytes(String.Format(
-                "export/{0}/diffuse.png",
-                name), bytes);
+            TexUtils.DumpTexure(tex2d, String.Format(
+                "export/{0}/diffuse.png", name));
         }
+
         if (_ta.normalTexture is Texture2DArray norm)
         {
             for (; DumpedNormal < norm.depth; DumpedNormal++)
             {
-                Texture2D tex = new Texture2D(norm.width, norm.height, TextureFormat.RGB24, false);
-                tex.SetPixels32(norm.GetPixels32(DumpedNormal));
-                byte[] bytes = tex.EncodeToPNG();
-                System.IO.File.WriteAllBytes(String.Format(
-                    "export/{0}/{1}.normal.png",
-                    name, DumpedNormal), bytes);
+                TexUtils.DumpNormalTexure(norm, DumpedNormal, String.Format(
+                    "export/{0}/{1}.normal.png", name, DumpedNormal));
             }
         }
         else if (_ta.normalTexture is Texture2D tex2d)
         {
-            Texture2D tex = new Texture2D(tex2d.width, tex2d.height, TextureFormat.RGB24, false);
-            tex.SetPixels32(tex2d.GetPixels32(DumpedDiffuse));
-            byte[] bytes = tex.EncodeToPNG();
-            System.IO.File.WriteAllBytes(String.Format(
-                "export/{0}/normal.png",
-                name), bytes);
+            TexUtils.DumpNormalTexure(tex2d, String.Format(
+                "export/{0}/normal.png", name));
         }
+
         if (_ta.specularTexture is Texture2DArray spec)
         {
             for (; DumpedSpecular < spec.depth; DumpedSpecular++)
             {
-                Texture2D tex = new Texture2D(spec.width, spec.height, TextureFormat.RGB24, false);
-                tex.SetPixels32(spec.GetPixels32(DumpedSpecular));
-                byte[] bytes = tex.EncodeToPNG();
-                System.IO.File.WriteAllBytes(String.Format(
-                    "export/{0}/{1}.specular.png",
-                    name, DumpedSpecular), bytes);
+                TexUtils.DumpSpecular(spec, DumpedSpecular, String.Format(
+                    "export/{0}/{1}.specular.png", name, DumpedSpecular));
             }
         }
         else if (_ta.specularTexture is Texture2D tex2d)
         {
-            Texture2D tex = new Texture2D(tex2d.width, tex2d.height, TextureFormat.RGB24, false);
-            tex.SetPixels32(tex2d.GetPixels32(DumpedDiffuse));
-            byte[] bytes = tex.EncodeToPNG();
-            System.IO.File.WriteAllBytes(String.Format(
-                "export/{0}/specular.png",
-                name), bytes);
+            TexUtils.DumpSpecular(tex2d, String.Format(
+                "export/{0}/specular.png", name));
         }
+    }
+
+    static void DumpTerrainAtlas(TextureAtlas _ta, string name)
+    {
         // The following fails since textures are not readable
         // This is only a flag in unity, but not easy to get by
-        // if (_ta is TextureAtlasTerrain terrains)
-        // {
-        //     for (; DumpedDiffuse < terrains.diffuse.Length; DumpedDiffuse++)
-        //     {
-        //         if (terrains.diffuse[DumpedDiffuse] == null) continue;
-        //         var img = terrains.diffuse[DumpedDiffuse];
-        //         byte[] bytes = img.EncodeToPNG();
-        //         System.IO.File.WriteAllBytes(String.Format(
-        //             "export/{0}/arr-{1}.diffuse.png",
-        //             name, DumpedDiffuse), bytes);
-        //     }
-        //     for (; DumpedNormal < terrains.normal.Length; DumpedNormal++)
-        //     {
-        //         if (terrains.normal[DumpedNormal] == null) continue;
-        //         var img = terrains.normal[DumpedNormal];
-        //         byte[] bytes = img.EncodeToPNG();
-        //         System.IO.File.WriteAllBytes(String.Format(
-        //             "export/{0}/arr-{1}.normal.png",
-        //             name, DumpedNormal), bytes);
-        //     }
-        //     for (; DumpedSpecular < terrains.specular.Length; DumpedSpecular++)
-        //     {
-        //         if (terrains.specular[DumpedSpecular] == null) continue;
-        //         var img = terrains.specular[DumpedSpecular];
-        //         byte[] bytes = img.EncodeToPNG();
-        //         System.IO.File.WriteAllBytes(String.Format(
-        //             "export/{0}/arr-{1}.specular.png",
-        //             name, DumpedSpecular), bytes);
-        //     }
-        // 
-        // }
+        if (_ta is TextureAtlasTerrain terrains)
+        {
+            for (; DumpedDiffuse < terrains.diffuse.Length; DumpedDiffuse++)
+            {
+                if (terrains.diffuse[DumpedDiffuse] == null) continue;
+                var img = terrains.diffuse[DumpedDiffuse];
+                TexUtils.DumpTexure(img, String.Format(
+                    "export/{0}/arr-{1}.diffuse.png",
+                    name, DumpedDiffuse));
+            }
+            for (; DumpedNormal < terrains.normal.Length; DumpedNormal++)
+            {
+                if (terrains.normal[DumpedNormal] == null) continue;
+                var img = terrains.normal[DumpedNormal];
+                TexUtils.DumpNormalTexure(img, String.Format(
+                    "export/{0}/arr-{1}.normal.png",
+                    name, DumpedNormal));
+            }
+            for (; DumpedSpecular < terrains.specular.Length; DumpedSpecular++)
+            {
+                if (terrains.specular[DumpedSpecular] == null) continue;
+                var img = terrains.specular[DumpedSpecular];
+                Texture2D tex = ResizeTexture(img, img.width, img.height, true);
+                byte[] bytes = tex.EncodeToPNG();
+                System.IO.File.WriteAllBytes(String.Format(
+                    "export/{0}/arr-{1}.specular.png",
+                    name, DumpedSpecular), bytes);
+            }
+        
+        }
+        if (_ta.diffuseTexture is Texture2DArray diff2Darr)
+        {
+            for (int i = 0; i < diff2Darr.depth; i++)
+            {
+                Texture2D copy = new Texture2D(diff2Darr.width, diff2Darr.height, diff2Darr.format, true, false);
+                Graphics.CopyTexture(diff2Darr, i, copy, 0);
+                Texture2D tex = copy.DeCompress();
+                byte[] bytes = tex.EncodeToPNG();
+                System.IO.File.WriteAllBytes(String.Format(
+                    "export/{0}/tex2darr-{1}.diffuse.png",
+                    name, i), bytes);
+            }
+        }
+        else if (_ta.diffuseTexture is Texture2D diff2D)
+        {
+            Texture2D tex = ResizeTexture(diff2D, diff2D.width, diff2D.height, true);
+            byte[] bytes = tex.EncodeToPNG();
+            System.IO.File.WriteAllBytes(String.Format(
+                "export/{0}/tex2d.diffuse.png",
+                name), bytes);
+        }
+
+        if (_ta.normalTexture is Texture2DArray norm2Darr)
+        {
+            for (int i = 0; i < norm2Darr.depth; i++)
+            {
+                Texture2D copy = new Texture2D(norm2Darr.width, norm2Darr.height, norm2Darr.format, true, true);
+                Graphics.CopyTexture(norm2Darr, i, copy, 0);
+                Texture2D tex = copy.DeCompress();
+                byte[] bytes = tex.EncodeToPNG();
+                System.IO.File.WriteAllBytes(String.Format(
+                    "export/{0}/tex2darr-{1}.normal.png",
+                    name, i), bytes);
+            }
+        }
+        else if (_ta.normalTexture is Texture2D spec2D)
+        {
+            Texture2D tex = ResizeTexture(spec2D, spec2D.width, spec2D.height, true);
+            byte[] bytes = tex.EncodeToPNG();
+            System.IO.File.WriteAllBytes(String.Format(
+                "export/{0}/tex2d.normal.png",
+                name), bytes);
+        }
+
+
+        if (_ta.specularTexture is Texture2DArray spec2Darr)
+        {
+            for (int i = 0; i < spec2Darr.depth; i++)
+            {
+                Texture2D copy = new Texture2D(spec2Darr.width, spec2Darr.height, spec2Darr.format, true, true);
+                Graphics.CopyTexture(spec2Darr, i, copy, 0);
+                Texture2D tex = copy.DeCompress();
+                byte[] bytes = tex.EncodeToPNG();
+                System.IO.File.WriteAllBytes(String.Format(
+                    "export/{0}/tex2darr-{1}.specular.png",
+                    name, i), bytes);
+            }
+        }
+        else if (_ta.specularTexture is Texture2D spec2D)
+        {
+            Texture2D tex = ResizeTexture(spec2D, spec2D.width, spec2D.height, true);
+            byte[] bytes = tex.EncodeToPNG();
+            System.IO.File.WriteAllBytes(String.Format(
+                "export/{0}/tex2d.specular.png",
+                name), bytes);
+        }
+
     }
 
     static bool IsPow2(int n)
@@ -228,6 +279,31 @@ public class OcbCustomTextures : IModApi
             count += (n >> i & 1);
         }
         return count == 1 && n > 0;
+    }
+
+    static Texture2D GetUniformTexture(int width, int height, Color color, bool quality = false)
+    {
+        Texture2D spec = new Texture2D(width, height, TextureFormat.RGBA32, true, true);
+        for (int y = 0; y < spec.height; y++)
+        {
+            for (int x = 0; x < spec.width; x++)
+            {
+                spec.SetPixel(x, y, color, 0);
+            }
+        }
+        spec.Apply(true);
+        spec.Compress(quality);
+        return spec;
+    }
+
+    static Texture2D GetNormalTexture(int width, int height)
+    {
+        return GetUniformTexture(width, height, new Color(1f, 0.5f, 0.5f, 0.5f), true);
+    }
+
+    static Texture2D GetSpecularTexture(int width, int height)
+    {
+        return GetUniformTexture(width, height, Color.green);
     }
 
     static void CreateNormalTextures(ref Texture texture, int sides)
@@ -242,17 +318,9 @@ public class OcbCustomTextures : IModApi
             // Copy from old texture to new copy
             for (int i = 0; i < arr.depth; i++)
                 Graphics.CopyTexture(arr, i, copy, i);
-            // Create a neutral specular texture
-            Texture2D normal = new Texture2D(arr.width, arr.height);
-            for (int y = 0; y < normal.height; y++)
-            {
-                for (int x = 0; x < normal.width; x++)
-                {
-                    normal.SetPixel(x, y, new Color(1f, 0.5f, 0.5f));
-                }
-            }
-            normal.Apply(true);
-            normal.Compress(true);
+            // Create a neutral normal texture
+            Texture2D normal = GetNormalTexture(arr.width, arr.height);
+            // Copy Texture2D to Texture2DArray
             for (int i = 0; i < sides; i++)
             {
                 int off = normal.mipmapCount - copy.mipmapCount;
@@ -284,16 +352,8 @@ public class OcbCustomTextures : IModApi
             for (int i = 0; i < arr.depth; i++)
                 Graphics.CopyTexture(arr, i, copy, i);
             // Create a neutral specular texture
-            Texture2D spec = new Texture2D(arr.width, arr.height);
-            for (int y = 0; y < spec.height; y++)
-            {
-                for (int x = 0; x < spec.width; x++)
-                {
-                    spec.SetPixel(x, y, Color.green);
-                }
-            }
-            spec.Apply(true);
-            spec.Compress(false);
+            Texture2D spec = GetSpecularTexture(arr.width, arr.height);
+            // Copy Texture2D to Texture2DArray
             for (int i = 0; i < sides; i++)
             {
                 int off = spec.mipmapCount - copy.mipmapCount;
@@ -433,8 +493,8 @@ public class OcbCustomTextures : IModApi
         // Log.Warning("Patched Mesh Atlas now has {0} items",
         //     (atlas.diffuseTexture as Texture2DArray).depth);
 
-        if (Dump) DumpAtlas(atlas, "opaque");
- 
+        // if (Dump) DumpAtlas(atlas, "opaque");
+
         Quality = GameOptionsManager.GetTextureQuality();
 
         return uvmap;
@@ -474,8 +534,11 @@ public class OcbCustomTextures : IModApi
         }
         else
         {
+            var normal = GetNormalTexture(texture.width, texture.height);
+            normal.filterMode = FilterMode.Trilinear;
+            normal.wrapMode = TextureWrapMode.Clamp;
             Array.Resize(ref atlas.normal, atlas.normal.Length + 1);
-            atlas.normal[atlas.normal.Length - 1] = null;
+            atlas.normal[atlas.normal.Length - 1] = normal;
         }
 
         if (tex.Specular != null)
@@ -488,9 +551,14 @@ public class OcbCustomTextures : IModApi
         }
         else
         {
+            var specular = GetUniformTexture(texture.width, texture.height, new Color(0f, 0f, 0f));
             Array.Resize(ref atlas.specular, atlas.specular.Length + 1);
-            atlas.specular[atlas.specular.Length - 1] = null;
+            atlas.specular[atlas.specular.Length - 1] = null; ;
         }
+
+        mesh.ReloadTextureArrays(false);
+
+        if (Dump) DumpTerrainAtlas(atlas, "terrain");
 
         Quality = GameOptionsManager.GetTextureQuality();
 
@@ -614,7 +682,6 @@ public class OcbCustomTextures : IModApi
         }
     }
 
-    /*
     static Texture2D ResizeTexture(Texture2D texture2D, int width, int height, bool color32)
     {
         RenderTexture rt = new RenderTexture(width, height, color32 ? 32 : 24);
@@ -625,7 +692,6 @@ public class OcbCustomTextures : IModApi
         resize.Apply(true);
         return resize;
     }
-    */
 
     [HarmonyPatch(typeof(int))]
     [HarmonyPatch("Parse")]
@@ -655,10 +721,15 @@ public class OcbCustomTextures : IModApi
         {
             if (Dump == false) return;
             DumpedDiffuse = 0; DumpedSpecular = 0; DumpedNormal = 0;
-            if (_idx == MeshDescription.MESH_OPAQUE) DumpAtlas(_ta, "opaque");
-            // if (_idx == MeshDescription.MESH_TERRAIN) DumpAtlas(_ta, "terrain");
-            // if (_idx == MeshDescription.MESH_DECALS) DumpAtlas(_ta, "decals");
+            System.IO.Directory.CreateDirectory("export");
+            System.IO.Directory.CreateDirectory("export/opaque");
+            System.IO.Directory.CreateDirectory("export/terrain");
+            System.IO.Directory.CreateDirectory("export/decals");
+            // if (_idx == MeshDescription.MESH_OPAQUE) DumpAtlas(_ta, "opaque");
+            if (_idx == MeshDescription.MESH_TERRAIN) DumpTerrainAtlas(_ta, "terrain");
+            if (_idx == MeshDescription.MESH_DECALS) DumpTerrainAtlas(_ta, "decals");
         }
+
     }
 
 }
