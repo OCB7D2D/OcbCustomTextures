@@ -62,13 +62,32 @@ that are normally set via the `uv.xml` fragment.
 
 ## Custom Terrain Textures
 
-Terrain textures seem to use an older approach by just holding
-a csharp array to `Texture2D[]`. This means (AFAICT) that each
-terrain must have its own material, since the texture would need
-to be attached explicitly to the `Main_Tex` uniform.
+Terrain textures seem to use an a two folded (and confusing approach).
+It seems even in vanilla you can't really add a snow block to a none
+snow biome (it will always look like the original terrain, e.g. topsoil).
+https://steamcommunity.com/app/251570/discussions/4/2264691750504420653/
 
-On the other hand this should make it a bit more versatile in
-terms of needed format and dimension of the texture.
+In order to properly use custom terrain texture you must have
+[SphereII's Legacy Distant Terrain][5] mod installed. It seems to
+disable the MicroSplat rendering for an older implementation.
+
+### Terrain MicroSplat Rendering
+
+From what I gathered it seems that 7D2D uses [MicroSplat rendering][6] for the
+terrain, which is somehow Biome dependent (e.g. TopSoil look depends on Biome).
+Unfortunately I couldn't really figure out how one could even possibly influence
+this. And [SphereII's Legacy Distant Terrain][5] mod seems to solve all issues.
+
+I know that MicroSplat rendering is using e.g. `TextureAtlas.diffuseTexture`,
+which is of type `Texture2DArray`. Unfortunately the highest asset rendition
+of the Map-Array is read-only protected, so I couldn't even alter it if I wanted.
+Funny enough the lower renditions (half/quarter) are readable, so I was able
+to do some tests, e.g. I can change textures for existing MicroSplat terrains.
+
+On the other hand, "legacy terrain" and as it seems the editor, use a legacy
+terrain atlas via e.g. `TextureAtlasTerrain.diffuse`. By Patching the function
+`GameManager.IsSplatMapAvailable` to always return false, I was able to bring the
+custom terrain textures to show, but then distant terrain wouldn't render anymore.
 
 ### XML Config For Custom Terrains
 
@@ -116,6 +135,11 @@ Reminds me of some work I've done years ago to create web-sprites.
 
 ## Changelog
 
+### Version 0.2.0
+
+- Major code refactoring
+- Loading speed improvements
+
 ### Version 0.1.0
 
 - Initial version
@@ -128,3 +152,5 @@ I've developed and tested this Mod against version a20.3(b3).
 [2]: https://www.khronos.org/opengl/wiki/Array_Texture
 [3]: https://github.com/Perfare/AssetStudio
 [4]: https://github.com/OCB7D2D/OcbCustomTexturesDemo
+[5]: https://gitlab.com/sphereii/SphereII-Mods/-/archive/master/SphereII-Mods-master.zip?path=SphereII%20Legacy%20Distant%20Terrain
+[6]: https://assetstore.unity.com/packages/tools/terrain/microsplat-96478

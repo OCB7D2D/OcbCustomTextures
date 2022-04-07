@@ -6,7 +6,8 @@ using System.Reflection;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine.Experimental.Rendering;
-using OCB;
+using static OCB.TextureUtils;
+using static OCB.TextureAtlasUtils;
 
 public class OcbCustomTextures : IModApi
 {
@@ -14,79 +15,31 @@ public class OcbCustomTextures : IModApi
     // Last active texture quality
     static int Quality = -1;
 
-    // Enable to dump all textures to disk
-    static bool Dump = false;
-
-    // ID automatically set from internal paints
-    // The default is just a safe bet hard-coding
-    static int PaintID = 183;
+    // DImensions of Full Atlas Textures
+    // static int OpaqueAtlasDim = 512;
+    // static int TerrainAtlasDim = 2048;
 
     // Flag if texture quality change handler is hooked
     static bool Registered = false;
 
-    static Dictionary<string, int> UvMap = new Dictionary<string, int>();
-
-    // A structure holding all the info for custom textures
-    public struct TexInfo
-    {
-        public UVRectTiling tiling;
-
-        public string ID;
-        public string Diffuse;
-        public string Normal;
-        public string Specular;
-
-        public TexInfo(XmlElement xml, DynamicProperties props)
-        {
-
-            tiling = new UVRectTiling();
-
-            if (!xml.HasAttribute("id")) throw new Exception("Mandatory attribute `id` missing");
-            // if (!props.Contains("Diffuse")) throw new Exception("Mandatory property `Diffuse` missing");
-            // if (!props.Contains("Normal")) throw new Exception("Mandatory property `Normal` missing");
-            // if (!props.Contains("Material")) throw new Exception("Mandatory property `Material` missing");
-
-            ID = xml.GetAttribute("id");
-
-            tiling.uv.x = xml.HasAttribute("x") ? float.Parse(xml.GetAttribute("x")) : 0;
-            tiling.uv.y = xml.HasAttribute("y") ? float.Parse(xml.GetAttribute("y")) : 0;
-            tiling.uv.width = xml.HasAttribute("w") ? float.Parse(xml.GetAttribute("w")) : 1;
-            tiling.uv.height = xml.HasAttribute("h") ? float.Parse(xml.GetAttribute("h")) : 1;
-            tiling.blockW = xml.HasAttribute("blockw") ? int.Parse(xml.GetAttribute("blockw")) : 1;
-            tiling.blockH = xml.HasAttribute("blockh") ? int.Parse(xml.GetAttribute("blockh")) : 1;
-
-            // tiling.textureName = xml.HasAttribute("name") ? xml.GetAttribute("name") : "";
-
-            tiling.color = !props.Contains("Color") ? Color.white :
-                 StringParsers.ParseColor(props.GetString("Color"));
-            tiling.material = !props.Contains("Material") ? null:
-                MaterialBlock.fromString(props.GetString("Material"));
-            tiling.bGlobalUV = props.Contains("GlobalUV") ?
-                props.GetBool("GlobalUV") : false;
-            tiling.bSwitchUV = props.Contains("SwitchUV") ?
-                props.GetBool("SwitchUV") : false;
-
-            Diffuse = props.Contains("Diffuse") ?
-                props.GetString("Diffuse") : null;
-            Normal = props.Contains("Normal") ?
-                props.GetString("Normal") : null;
-            Specular = props.Contains("Specular") ?
-                props.GetString("Specular") : null;
-
-        }
-    }
+    // Global mapping to be used by integer parsing hook
+    static readonly Dictionary<string, int> UvMap = new Dictionary<string, int>();
 
     // A static list of additional texture (used for hot reload)
-    static List<TexInfo> Textures = new List<TexInfo>();
+    static readonly List<TextureConfig> CustomOpaques = new List<TextureConfig>();
+    static readonly List<TextureConfig> CustomTerrains = new List<TextureConfig>();
+
+    // Counter how many individual textures are added
+    static int OpaquesAdded = 0;
+    static int TerrainsAdded = 0;
 
     public void InitMod(Mod mod)
     {
         Debug.Log("Loading OCB Texture Atlas Patch: " + GetType().ToString());
+        if (GameManager.IsDedicatedServer) return; // Don't patch server instance
         new Harmony(GetType().ToString()).PatchAll(Assembly.GetExecutingAssembly());
-
         ModEvents.GameStartDone.RegisterHandler(GameStartDone);
         ModEvents.GameShutdown.RegisterHandler(GameShutdown);
-
     }
 
     void TextureQualityChanged(int quality)
@@ -94,9 +47,49 @@ public class OcbCustomTextures : IModApi
         if (Quality == -1) Quality = quality;
         else if (Quality == 2 && quality == 3) { Quality = 3; return; }
         else if (Quality == 3 && quality == 2) { Quality = 2; return; }
-        var mesh = MeshDescription.meshes[MeshDescription.MESH_OPAQUE];
-        foreach (var texture in Textures)
-            PatchBlocksAtlas(mesh, texture);
+        var opaque = MeshDescription.meshes[MeshDescription.MESH_OPAQUE];
+        var terrain = MeshDescription.meshes[MeshDescription.MESH_TERRAIN];
+        // Make enough space available
+        if (OpaquesAdded > 0)
+        {
+            if (opaque.TexDiffuse is Texture2DArray diff2DArr)
+            {
+                bool linear = !GraphicsFormatUtility.IsSRGBFormat(diff2DArr.graphicsFormat);
+                opaque.TexDiffuse = opaque.textureAtlas.diffuseTexture = ResizeTextureArray(
+                    diff2DArr, diff2DArr.depth + OpaquesAdded, true, linear, true);
+            }
+
+            if (opaque.TexNormal is Texture2DArray norm2DArr)
+            {
+                bool linear = !GraphicsFormatUtility.IsSRGBFormat(norm2DArr.graphicsFormat);
+                opaque.TexNormal = opaque.textureAtlas.normalTexture = ResizeTextureArray(
+                    norm2DArr, norm2DArr.depth + OpaquesAdded, true, linear, true);
+            }
+
+            if (opaque.TexSpecular is Texture2DArray spec2DArr)
+            {
+                bool linear = !GraphicsFormatUtility.IsSRGBFormat(spec2DArr.graphicsFormat);
+                opaque.TexSpecular = opaque.textureAtlas.specularTexture = ResizeTextureArray(
+                    spec2DArr, spec2DArr.depth + OpaquesAdded, true, linear, true);
+            }
+        }
+        // Patch the textures into new array
+        foreach (var texture in CustomOpaques)
+            PatchAtlasBlocks(opaque, texture);
+        // Terrain seems to scale automatically?
+        // Note: we don't alter MicroSplat-Maps yet
+        // foreach (var texture in CustomTerrains)
+        //     PatchAtlasTerrain(terrain, texture);
+        // Apply pixel changes (expensive)
+        if (OpaquesAdded > 0)
+        {
+            // Apply pixel changes only when finished
+            // Reduces loading times to nearly instantly
+            ApplyPixelChanges(opaque.textureAtlas.diffuseTexture, false);
+            ApplyPixelChanges(opaque.textureAtlas.normalTexture, false);
+            ApplyPixelChanges(opaque.textureAtlas.specularTexture, false);
+            opaque.ReloadTextureArrays(false);
+        }
         if (GameManager.Instance != null && GameManager.Instance.prefabLODManager != null)
             GameManager.Instance.prefabLODManager.UpdateMaterials();
     }
@@ -105,6 +98,7 @@ public class OcbCustomTextures : IModApi
     {
         if (Registered) return;
         GameOptionsManager.TextureQualityChanged += TextureQualityChanged;
+        GameManager.Instance.prefabLODManager.UpdateMaterials();
         Registered = true;
     }
 
@@ -115,454 +109,172 @@ public class OcbCustomTextures : IModApi
         Registered = false;
     }
 
-    static int DumpedDiffuse = 0;
-    static int DumpedNormal = 0;
-    static int DumpedSpecular = 0;
 
-    static void DumpAtlas(TextureAtlas _ta, string name)
-    {
-
-        System.IO.Directory.CreateDirectory("export");
-        System.IO.Directory.CreateDirectory("export/" + name);
-
-        if (_ta.diffuseTexture is Texture2DArray diff)
-        {
-            for (; DumpedDiffuse < diff.depth; DumpedDiffuse++)
-            {
-                TexUtils.DumpTexure(diff, DumpedDiffuse, String.Format(
-                    "export/{0}/{1}.diffuse.png", name, DumpedDiffuse));
-            }
-        }
-        else if (_ta.diffuseTexture is Texture2D tex2d)
-        {
-            TexUtils.DumpTexure(tex2d, String.Format(
-                "export/{0}/diffuse.png", name));
-        }
-
-        if (_ta.normalTexture is Texture2DArray norm)
-        {
-            for (; DumpedNormal < norm.depth; DumpedNormal++)
-            {
-                TexUtils.DumpNormalTexure(norm, DumpedNormal, String.Format(
-                    "export/{0}/{1}.normal.png", name, DumpedNormal));
-            }
-        }
-        else if (_ta.normalTexture is Texture2D tex2d)
-        {
-            TexUtils.DumpNormalTexure(tex2d, String.Format(
-                "export/{0}/normal.png", name));
-        }
-
-        if (_ta.specularTexture is Texture2DArray spec)
-        {
-            for (; DumpedSpecular < spec.depth; DumpedSpecular++)
-            {
-                TexUtils.DumpSpecular(spec, DumpedSpecular, String.Format(
-                    "export/{0}/{1}.specular.png", name, DumpedSpecular));
-            }
-        }
-        else if (_ta.specularTexture is Texture2D tex2d)
-        {
-            TexUtils.DumpSpecular(tex2d, String.Format(
-                "export/{0}/specular.png", name));
-        }
-    }
-
-    static void DumpTerrainAtlas(TextureAtlas _ta, string name)
-    {
-        // The following fails since textures are not readable
-        // This is only a flag in unity, but not easy to get by
-        if (_ta is TextureAtlasTerrain terrains)
-        {
-            for (; DumpedDiffuse < terrains.diffuse.Length; DumpedDiffuse++)
-            {
-                if (terrains.diffuse[DumpedDiffuse] == null) continue;
-                var img = terrains.diffuse[DumpedDiffuse];
-                TexUtils.DumpTexure(img, String.Format(
-                    "export/{0}/arr-{1}.diffuse.png",
-                    name, DumpedDiffuse));
-            }
-            for (; DumpedNormal < terrains.normal.Length; DumpedNormal++)
-            {
-                if (terrains.normal[DumpedNormal] == null) continue;
-                var img = terrains.normal[DumpedNormal];
-                TexUtils.DumpNormalTexure(img, String.Format(
-                    "export/{0}/arr-{1}.normal.png",
-                    name, DumpedNormal));
-            }
-            for (; DumpedSpecular < terrains.specular.Length; DumpedSpecular++)
-            {
-                if (terrains.specular[DumpedSpecular] == null) continue;
-                var img = terrains.specular[DumpedSpecular];
-                Texture2D tex = ResizeTexture(img, img.width, img.height, true);
-                byte[] bytes = tex.EncodeToPNG();
-                System.IO.File.WriteAllBytes(String.Format(
-                    "export/{0}/arr-{1}.specular.png",
-                    name, DumpedSpecular), bytes);
-            }
-        
-        }
-        if (_ta.diffuseTexture is Texture2DArray diff2Darr)
-        {
-            for (int i = 0; i < diff2Darr.depth; i++)
-            {
-                Texture2D copy = new Texture2D(diff2Darr.width, diff2Darr.height, diff2Darr.format, true, false);
-                Graphics.CopyTexture(diff2Darr, i, copy, 0);
-                Texture2D tex = copy.DeCompress();
-                byte[] bytes = tex.EncodeToPNG();
-                System.IO.File.WriteAllBytes(String.Format(
-                    "export/{0}/tex2darr-{1}.diffuse.png",
-                    name, i), bytes);
-            }
-        }
-        else if (_ta.diffuseTexture is Texture2D diff2D)
-        {
-            Texture2D tex = ResizeTexture(diff2D, diff2D.width, diff2D.height, true);
-            byte[] bytes = tex.EncodeToPNG();
-            System.IO.File.WriteAllBytes(String.Format(
-                "export/{0}/tex2d.diffuse.png",
-                name), bytes);
-        }
-
-        if (_ta.normalTexture is Texture2DArray norm2Darr)
-        {
-            for (int i = 0; i < norm2Darr.depth; i++)
-            {
-                Texture2D copy = new Texture2D(norm2Darr.width, norm2Darr.height, norm2Darr.format, true, true);
-                Graphics.CopyTexture(norm2Darr, i, copy, 0);
-                Texture2D tex = copy.DeCompress();
-                byte[] bytes = tex.EncodeToPNG();
-                System.IO.File.WriteAllBytes(String.Format(
-                    "export/{0}/tex2darr-{1}.normal.png",
-                    name, i), bytes);
-            }
-        }
-        else if (_ta.normalTexture is Texture2D spec2D)
-        {
-            Texture2D tex = ResizeTexture(spec2D, spec2D.width, spec2D.height, true);
-            byte[] bytes = tex.EncodeToPNG();
-            System.IO.File.WriteAllBytes(String.Format(
-                "export/{0}/tex2d.normal.png",
-                name), bytes);
-        }
-
-
-        if (_ta.specularTexture is Texture2DArray spec2Darr)
-        {
-            for (int i = 0; i < spec2Darr.depth; i++)
-            {
-                Texture2D copy = new Texture2D(spec2Darr.width, spec2Darr.height, spec2Darr.format, true, true);
-                Graphics.CopyTexture(spec2Darr, i, copy, 0);
-                Texture2D tex = copy.DeCompress();
-                byte[] bytes = tex.EncodeToPNG();
-                System.IO.File.WriteAllBytes(String.Format(
-                    "export/{0}/tex2darr-{1}.specular.png",
-                    name, i), bytes);
-            }
-        }
-        else if (_ta.specularTexture is Texture2D spec2D)
-        {
-            Texture2D tex = ResizeTexture(spec2D, spec2D.width, spec2D.height, true);
-            byte[] bytes = tex.EncodeToPNG();
-            System.IO.File.WriteAllBytes(String.Format(
-                "export/{0}/tex2d.specular.png",
-                name), bytes);
-        }
-
-    }
-
-    static bool IsPow2(int n)
-    {
-        int count = 0;
-        for (int i = 0; i < 32; i++)
-        {
-            count += (n >> i & 1);
-        }
-        return count == 1 && n > 0;
-    }
-
-    static Texture2D GetUniformTexture(int width, int height, Color color, bool quality = false)
-    {
-        Texture2D spec = new Texture2D(width, height, TextureFormat.RGBA32, true, true);
-        for (int y = 0; y < spec.height; y++)
-        {
-            for (int x = 0; x < spec.width; x++)
-            {
-                spec.SetPixel(x, y, color, 0);
-            }
-        }
-        spec.Apply(true);
-        spec.Compress(quality);
-        return spec;
-    }
-
-    static Texture2D GetNormalTexture(int width, int height)
-    {
-        return GetUniformTexture(width, height, new Color(1f, 0.5f, 0.5f, 0.5f), true);
-    }
-
-    static Texture2D GetSpecularTexture(int width, int height)
-    {
-        return GetUniformTexture(width, height, Color.green);
-    }
-
-    static void CreateNormalTextures(ref Texture texture, int sides)
-    {
-        if (texture is Texture2DArray arr)
-        {
-            bool linear = !GraphicsFormatUtility.IsSRGBFormat(arr.graphicsFormat);
-
-            // Create a copy and add space for 4 more textures
-            Texture2DArray copy = new Texture2DArray(arr.width,
-                arr.height, arr.depth + sides, arr.format, true, linear);
-            // Copy from old texture to new copy
-            for (int i = 0; i < arr.depth; i++)
-                Graphics.CopyTexture(arr, i, copy, i);
-            // Create a neutral normal texture
-            Texture2D normal = GetNormalTexture(arr.width, arr.height);
-            // Copy Texture2D to Texture2DArray
-            for (int i = 0; i < sides; i++)
-            {
-                int off = normal.mipmapCount - copy.mipmapCount;
-                for (int n = 0; n < copy.mipmapCount; n++)
-                {
-                    copy.SetPixelData(normal.GetPixelData<byte>(n + off), n, arr.depth + i);
-                }
-
-            }
-            copy.Apply(false);
-            // Assign the copy back
-            texture = copy;
-            return;
-        }
-        // else if (texture is Texture2D) {}
-        throw new Exception("Can only patch Texture2DArray");
-    }
-
-    static void CreateSpecularTextures(ref Texture texture, int sides)
-    {
-        if (texture is Texture2DArray arr)
-        {
-            bool linear = !GraphicsFormatUtility.IsSRGBFormat(arr.graphicsFormat);
-
-            // Create a copy and add space for 4 more textures
-            Texture2DArray copy = new Texture2DArray(arr.width,
-                arr.height, arr.depth + sides, arr.format, true, linear);
-            // Copy from old texture to new copy
-            for (int i = 0; i < arr.depth; i++)
-                Graphics.CopyTexture(arr, i, copy, i);
-            // Create a neutral specular texture
-            Texture2D spec = GetSpecularTexture(arr.width, arr.height);
-            // Copy Texture2D to Texture2DArray
-            for (int i = 0; i < sides; i++)
-            {
-                int off = spec.mipmapCount - copy.mipmapCount;
-                for (int n = 0; n < copy.mipmapCount; n++)
-                {
-                    copy.SetPixelData(spec.GetPixelData<byte>(n + off), n, arr.depth + i);
-                }
-
-            }
-            copy.Apply(false);
-            // Assign the copy back
-            texture = copy;
-            return;
-        }
-        // else if (texture is Texture2D) {}
-        throw new Exception("Can only patch Texture2DArray");
-    }
-
-    static Texture2D LoadTexture(string bundle, string asset)
-    {
-        // Get the texture from pre-loaded bundles
-        Texture2D tex = AssetBundleManager.Instance
-            .Get<Texture2D>(bundle, asset);
-        // Check if loading was successful
-        if (tex == null) throw new Exception(String.Format(
-            "Could not load asset {1} from bundle {0}",
-            bundle, asset));
-        if (tex.width != tex.height) throw new Exception(String.Format(
-            "Texture must be a square, is {0}x{1} at ({2})",
-            tex.width, tex.height, asset));
-        if (!IsPow2(tex.width)) throw new Exception(String.Format(
-            "Texture dimension must be power of two ({0}) at {2}",
-            tex.width, tex.height, asset));
-        return tex;
-    }
-
-    static Texture2D LoadTexture(string bundle, string asset, TextureFormat format)
-    {
-        var tex = LoadTexture(bundle, asset);
-        // Check if the format is compatible
-        if (tex.format != format) throw new Exception(String.Format(
-            "Texture format {0} not compatible with atlas {1} ({2})",
-            tex.format, format, asset));
-        return tex;
-    }
-
-    static int PatchTexture(ref Texture texture, string url)
-    {
-        if (texture is Texture2DArray arr)
-        {
-            bool linear = !GraphicsFormatUtility.IsSRGBFormat(arr.graphicsFormat);
-            // Get the resource bundle and asset path
-            var path = DataLoader.ParseDataPathIdentifier(url);
-            // Try to load the (cached) asset bundle resource (once)
-            AssetBundleManager.Instance.LoadAssetBundle(path.BundlePath);
-            // Support different face textures
-            var assets = path.AssetName.Split(',');
-            // Create a copy and add space for 4 more textures
-            Texture2DArray copy = new Texture2DArray(arr.width,
-                arr.height, arr.depth + assets.Length, arr.format, true, linear);
-            // Copy old textures to new copy
-            for (int i = 0; i < arr.depth; i++)
-                Graphics.CopyTexture(arr, i, copy, i);
-            // Only add as many textures as needed
-            for (int i = 0; i < assets.Length; i++)
-            {
-                var tex = LoadTexture(path.BundlePath, assets[i], arr.format);
-                // This will automatically do the resize for us, neat!
-                int off = tex.mipmapCount - copy.mipmapCount;
-                // Copy the loaded texture (use same for every side for now)
-                // ToDo: add different config to set them separately
-                for (int n = 0; n < copy.mipmapCount; n++)
-                {
-                    copy.SetPixelData(tex.GetPixelData<byte>(n + off), n, arr.depth + i);
-                }
-            }
-            // Apply new pixels
-            copy.Apply(false);
-            // Assign the copy back
-            texture = copy;
-            return assets.Length;
-        }
-        // else if (texture is Texture2D) {}
-        throw new Exception("Can only patch Texture2DArray");
-    }
-
-    static int PatchBlocksAtlas(MeshDescription mesh, TexInfo tex)
+    static int PatchAtlasBlocks(MeshDescription mesh, TextureConfig tex)
     {
 
         if (mesh == null) throw new Exception("MESH MISSING");
         var atlas = mesh.textureAtlas as TextureAtlasBlocks;
         if (atlas == null) throw new Exception("INVALID ATLAS TYPE");
-        var uvmap = atlas.uvMapping.Length;
+        var textureID = atlas.uvMapping.Length;
 
-        if (atlas.diffuseTexture is Texture2DArray tex2Darr)
-        {
-            tex.tiling.index = tex2Darr.depth;
-        }
-        else
-        {
+        if (!(atlas.diffuseTexture is Texture2DArray tex2Darr))
+        { 
             throw new Exception("Expected Texture2DArray");
         }
 
-        if (UvMap.ContainsKey(tex.ID)) Log.Warning(
-            "Overwriting texture key {0}", tex.ID);
-        UvMap[tex.ID] = uvmap;
+        // Log.Out("Adding opaque texture {0} at uvMapping[{1}] with index[{2}]", tex.ID, textureID, tex.tiling.index);
 
-        int sides = PatchTexture(ref atlas.diffuseTexture, tex.Diffuse);
+        if (!UvMap.ContainsKey(tex.ID)) UvMap[tex.ID] = textureID;
+        else if (UvMap[tex.ID] != textureID) Log.Warning(
+                 "Overwriting texture key {0}", tex.ID);
 
-        Array.Resize(ref atlas.uvMapping, uvmap + 1);
-        atlas.uvMapping[uvmap] = tex.tiling;
+        PatchOpaqueTexture(ref tex2Darr, tex.Diffuse, tex.tiling.index);
 
-        if (tex.Normal != null)
+        if (atlas.uvMapping.Length < textureID + 1)
         {
-            PatchTexture(ref atlas.normalTexture, tex.Normal);
+            Array.Resize(ref atlas.uvMapping, textureID + 1);
         }
-        else
-        {
-            CreateNormalTextures(ref atlas.normalTexture, sides);
-        }
+        atlas.uvMapping[textureID] = tex.tiling;
 
-        if (tex.Specular != null)
+        if (tex.Normal != null && atlas.normalTexture is Texture2DArray norm2Darr)
         {
-            PatchTexture(ref atlas.specularTexture, tex.Specular);
+            PatchOpaqueTexture(ref norm2Darr, tex.Normal, tex.tiling.index);
         }
-        else
+        else if (atlas.normalTexture is Texture2DArray norm2Darr2)
         {
-            CreateSpecularTextures(ref atlas.specularTexture, sides);
+            PatchOpaqueNormal(ref norm2Darr2, tex.tiling.index, tex.Diffuse.Assets.Length);
         }
 
-        // mesh.TexDiffuse = atlas.diffuseTexture;
-        // mesh.TexNormal = atlas.normalTexture;
-        // mesh.TexSpecular = atlas.specularTexture;
-        
-        mesh.ReloadTextureArrays(false);
+        if (tex.Specular != null && atlas.specularTexture is Texture2DArray spec2Darr)
+        {
+            PatchOpaqueTexture(ref spec2Darr, tex.Specular, tex.tiling.index);
+        }
+        else if (atlas.specularTexture is Texture2DArray spec2Darr2)
+        {
+            PatchOpaqueSpecular(ref spec2Darr2, tex.tiling.index, tex.Diffuse.Assets.Length);
+        }
 
+        mesh.TexDiffuse = atlas.diffuseTexture;
+        mesh.TexNormal = atlas.normalTexture;
+        mesh.TexSpecular = atlas.specularTexture;
+
+        // mesh.ReloadTextureArrays(false);
+        // mesh.UnloadTextureArrays(MeshDescription.MESH_OPAQUE);
         // Log.Warning("Patched Mesh Atlas now has {0} items",
         //     (atlas.diffuseTexture as Texture2DArray).depth);
 
-        // if (Dump) DumpAtlas(atlas, "opaque");
-
         Quality = GameOptionsManager.GetTextureQuality();
 
-        return uvmap;
+        return textureID;
 
     }
 
-    static int PatchTerrainAtlas(MeshDescription mesh, TexInfo tex)
+    static int PatchAtlasTerrain(MeshDescription mesh, TextureConfig tex)
     {
 
         if (mesh == null) throw new Exception("MESH MISSING");
         var atlas = mesh.textureAtlas as TextureAtlasTerrain;
         if (atlas == null) throw new Exception("INVALID ATLAS TYPE");
-        var uvmap = atlas.uvMapping.Length;
+        var textureID = atlas.uvMapping.Length;
 
-        if (UvMap.ContainsKey(tex.ID)) Log.Warning(
-            "Overwriting texture key {0}", tex.ID);
-        tex.tiling.index = atlas.diffuse.Length;
-        UvMap[tex.ID] = uvmap;
+        if (!UvMap.ContainsKey(tex.ID)) UvMap[tex.ID] = textureID;
+        else if (UvMap[tex.ID] != textureID) Log.Warning(
+                 "Overwriting texture key {0}", tex.ID);
+
+        // Make sure all our arrays really have enough space
+        // This should already have happened for better performance
+        if (atlas.diffuse.Length <= tex.tiling.index)
+        {
+            Log.Out("Resize diffuse to {0}", tex.tiling.index + 1);
+            Array.Resize(ref atlas.diffuse, tex.tiling.index + 1);
+        }
+        if (atlas.normal.Length <= tex.tiling.index)
+        {
+            Log.Out("Resize normal to {0}", tex.tiling.index + 1);
+            Array.Resize(ref atlas.normal, tex.tiling.index + 1);
+        }
+        if (atlas.specular.Length <= tex.tiling.index)
+        {
+            Log.Out("Resize specular to {0}", tex.tiling.index + 1);
+            Array.Resize(ref atlas.specular, tex.tiling.index + 1);
+        }
+
+        // Hasn't been optimized, but should be OKish
+        Array.Resize(ref atlas.uvMapping, textureID + 1);
+        atlas.uvMapping[textureID] = tex.tiling;
 
         // Get the resource bundle and asset path
-        var path = DataLoader.ParseDataPathIdentifier(tex.Diffuse);
-        AssetBundleManager.Instance.LoadAssetBundle(path.BundlePath);
-        var texture = LoadTexture(path.BundlePath, path.AssetName);
-        Array.Resize(ref atlas.diffuse, atlas.diffuse.Length + 1);
-        atlas.diffuse[atlas.diffuse.Length - 1] = texture;
+        var texture = LoadTexture(tex.Diffuse.Path);
+        // texture = GetBestMipMapTexture(texture, 256);
 
-        Array.Resize(ref atlas.uvMapping, uvmap + 1);
-        atlas.uvMapping[uvmap] = tex.tiling;
+        // Log.Out("Adding terrain texture {0} at uvMapping[{1}] with index[{2}] ({3}x{4})",
+        //     tex.ID, textureID, tex.tiling.index, texture.width, texture.height);
+
+        atlas.diffuse[tex.tiling.index] = texture;
 
         if (tex.Normal != null)
         {
-            var norm = DataLoader.ParseDataPathIdentifier(tex.Normal);
-            AssetBundleManager.Instance.LoadAssetBundle(norm.BundlePath);
-            var normal = LoadTexture(norm.BundlePath, norm.AssetName);
-            Array.Resize(ref atlas.normal, atlas.normal.Length + 1);
-            atlas.normal[atlas.normal.Length - 1] = normal;
+            var normal = LoadTexture(tex.Normal.Path);
+            // normal = GetBestMipMapTexture(normal, 256);
+            atlas.normal[tex.tiling.index] = normal;
         }
         else
         {
-            var normal = GetNormalTexture(texture.width, texture.height);
+            var normal = GetTerrainNormal(texture.width);
             normal.filterMode = FilterMode.Trilinear;
-            normal.wrapMode = TextureWrapMode.Clamp;
-            Array.Resize(ref atlas.normal, atlas.normal.Length + 1);
-            atlas.normal[atlas.normal.Length - 1] = normal;
+            normal.wrapMode = TextureWrapMode.Repeat;
+            atlas.normal[tex.tiling.index] = normal;
         }
 
         if (tex.Specular != null)
         {
-            var spec = DataLoader.ParseDataPathIdentifier(tex.Specular);
-            AssetBundleManager.Instance.LoadAssetBundle(spec.BundlePath);
-            var specular = LoadTexture(spec.BundlePath, spec.AssetName);
-            Array.Resize(ref atlas.specular, atlas.specular.Length + 1);
-            atlas.specular[atlas.specular.Length - 1] = specular;
+            var specular = LoadTexture(tex.Specular.Path);
+            // specular = GetBestMipMapTexture(specular, 256);
+            atlas.specular[tex.tiling.index] = specular;
         }
         else
         {
-            var specular = GetUniformTexture(texture.width, texture.height, new Color(0f, 0f, 0f));
-            Array.Resize(ref atlas.specular, atlas.specular.Length + 1);
-            atlas.specular[atlas.specular.Length - 1] = null; ;
+            // Specular seems OK if it is null (same as black?)
+            // var specular = GetTerrainSpecular(texture.width);
+            // specular.filterMode = FilterMode.Trilinear;
+            // specular.wrapMode = TextureWrapMode.Repeat;
+            // atlas.specular[tex.tiling.index] = specular;
         }
 
-        mesh.ReloadTextureArrays(false);
+        mesh.TexDiffuse = atlas.diffuseTexture;
+        mesh.TexNormal = atlas.normalTexture;
+        mesh.TexSpecular = atlas.specularTexture;
 
-        if (Dump) DumpTerrainAtlas(atlas, "terrain");
+        // Only Terrain uses SplatMap?
+        // mesh.ReloadTextureArrays(true);
 
         Quality = GameOptionsManager.GetTextureQuality();
 
-        return uvmap;
+        return textureID;
+
+    }
+
+    static int GetFreePaintID()
+    {
+        
+        for (var i = 0; i < BlockTextureData.list.Length; i++)
+        {
+            if (BlockTextureData.list[i] == null) return i;
+        }
+        throw new Exception("No more free Paint IDs");
+    }
+
+    static public DynamicProperties GetDynamicProperties(XmlNode xml)
+    {
+        DynamicProperties props = new DynamicProperties();
+        foreach (XmlNode childNode in xml.ChildNodes)
+        {
+            if (childNode.NodeType != XmlNodeType.Element) continue;
+            if (childNode.Name.Equals("property") == false) continue;
+            props.Add(childNode);
+        }
+        return props;
 
     }
 
@@ -570,12 +282,12 @@ public class OcbCustomTextures : IModApi
     [HarmonyPatch("CreateBlockTextures")]
     public class Patches
     {
-        class SimpleEnumerator : IEnumerable
+        class PatchedEnumerator : IEnumerable
         {
 
             readonly XmlFile XmlFile;
 
-            public SimpleEnumerator(XmlFile XmlFile)
+            public PatchedEnumerator(XmlFile XmlFile)
             {
                 this.XmlFile = XmlFile;
             }
@@ -586,80 +298,150 @@ public class OcbCustomTextures : IModApi
                 XmlElement documentElement = XmlFile.XmlDoc.DocumentElement;
                 if (documentElement.ChildNodes.Count == 0)
                     throw new Exception("No element <block_textures> found!");
-                IEnumerator enumerator = documentElement.ChildNodes.GetEnumerator();
+
+                var opaque = MeshDescription.meshes[MeshDescription.MESH_OPAQUE];
+                var terrain = MeshDescription.meshes[MeshDescription.MESH_TERRAIN];
+                var opaqueAtlas = opaque.textureAtlas as TextureAtlasBlocks;
+                var terrainAtlas = terrain.textureAtlas as TextureAtlasTerrain;
+
+                int builtinTerrains = terrainAtlas.diffuse.Length;
+                int builtinOpaques = (opaqueAtlas.diffuseTexture as Texture2DArray).depth;
+
+                /* PRE-PARSE STEP TO DETERMINE FINAL NUMBERS FIRST */
+
+                var children = documentElement.ChildNodes;
+                for (var i = 0; i < children.Count; i++)
+                {
+                    if (children[i].NodeType != XmlNodeType.Element) continue;
+                    if (!(children[i] is XmlElement el)) continue;
+                    if (el.Name.Equals("paint"))
+                    {
+                        // Containing a diffuse property is our magic token
+                        DynamicProperties props = GetDynamicProperties(el);
+                        if (!props.Values.ContainsKey("Diffuse")) continue;
+                        var texture = new TextureConfig(el, props);
+                        texture.tiling.index = builtinOpaques + OpaquesAdded;
+                        OpaquesAdded += texture.Length;
+                    }
+                    else if (el.NodeType == XmlNodeType.Element && el.Name.Equals("terrain"))
+                    {
+                        DynamicProperties props = GetDynamicProperties(el);
+                        var texture = new TextureConfig(el, props);
+                        texture.tiling.index = builtinTerrains + TerrainsAdded;
+                        TerrainsAdded += texture.Length;
+                    }
+                }
+
+                /* ADD SPACE FOR ADDITIONAL TEXTURES IN ONE GO FOR BEST PERFORMANCE */
+
+                if (OpaquesAdded > 0)
+                {
+                    if (opaque.TexDiffuse is Texture2DArray diff2DArr)
+                    {
+                        bool linear = !GraphicsFormatUtility.IsSRGBFormat(diff2DArr.graphicsFormat);
+                        opaque.TexDiffuse = opaque.textureAtlas.diffuseTexture = ResizeTextureArray(
+                            diff2DArr, diff2DArr.depth + OpaquesAdded, true, linear, true);
+                    }
+
+                    if (opaque.TexNormal is Texture2DArray norm2DArr)
+                    {
+                        bool linear = !GraphicsFormatUtility.IsSRGBFormat(norm2DArr.graphicsFormat);
+                        opaque.TexNormal = opaque.textureAtlas.normalTexture = ResizeTextureArray(
+                            norm2DArr, norm2DArr.depth + OpaquesAdded, true, linear, true);
+                    }
+
+                    if (opaque.TexSpecular is Texture2DArray spec2DArr)
+                    {
+                        bool linear = !GraphicsFormatUtility.IsSRGBFormat(spec2DArr.graphicsFormat);
+                        opaque.TexSpecular = opaque.textureAtlas.specularTexture = ResizeTextureArray(
+                            spec2DArr, spec2DArr.depth + OpaquesAdded, true, linear, true);
+                    }
+                }
+
+                if (TerrainsAdded > 0)
+                {
+                    Array.Resize(ref terrainAtlas.diffuse, terrainAtlas.diffuse.Length + TerrainsAdded);
+                    Array.Resize(ref terrainAtlas.normal, terrainAtlas.normal.Length + TerrainsAdded);
+                    Array.Resize(ref terrainAtlas.specular, terrainAtlas.specular.Length + TerrainsAdded);
+                }
+
+                // Reset counters
+                OpaquesAdded = 0;
+                TerrainsAdded = 0;
+
+                /* ACTUAL PARSING AND ASSIGNING (PATCHED VANILLA CODE) */
+
+                IEnumerator enumerator = children.GetEnumerator();
                 try
                 {
                     while (enumerator.MoveNext())
                     {
-                        XmlNode current = (XmlNode)enumerator.Current;
-
-                        if (current.NodeType == XmlNodeType.Element && current.Name.Equals("paint"))
+                        if (!(enumerator.Current is XmlElement xmlElement)) continue;
+                        if (xmlElement.Name.Equals("paint"))
                         {
-
-                            XmlElement xmlElement = (XmlElement)current;
-                            DynamicProperties dynamicProperties = new DynamicProperties();
-                            foreach (XmlNode childNode in xmlElement.ChildNodes)
-                            {
-                                if (childNode.NodeType == XmlNodeType.Element && childNode.Name.Equals("property"))
-                                    dynamicProperties.Add(childNode);
-                            }
+                            DynamicProperties props = GetDynamicProperties(xmlElement);
                             BlockTextureData blockTextureData = new BlockTextureData()
                             {
                                 Name = xmlElement.GetAttribute("name")
                             };
-
-                            var mesh = MeshDescription.meshes[MeshDescription.MESH_OPAQUE];
-
                             // Containing a diffuse property is our magic token
-                            if (dynamicProperties.Values.ContainsKey("Diffuse"))
+                            if (props.Values.ContainsKey("Diffuse"))
                             {
-
-                                var texture = new TexInfo(xmlElement, dynamicProperties);
-                                int uvmap = PatchBlocksAtlas(mesh, texture);
-                                blockTextureData.TextureID = (ushort)(uvmap);
-                                blockTextureData.ID = ++PaintID;
-                                Textures.Add(texture);
-
+                                var texture = new TextureConfig(xmlElement, props);
+                                texture.tiling.index = builtinOpaques + OpaquesAdded;
+                                int TextureID = PatchAtlasBlocks(opaque, texture);
+                                blockTextureData.TextureID = (ushort)(TextureID);
+                                blockTextureData.ID = GetFreePaintID();
+                                OpaquesAdded += texture.Length;
+                                CustomOpaques.Add(texture);
                             }
                             else
                             {
-
-                                // This is the path the vanilla code takes
-                                PaintID = blockTextureData.ID = int.Parse(xmlElement.GetAttribute("id"));
-                                if (dynamicProperties.Values.ContainsKey("TextureId"))
-                                    blockTextureData.TextureID = Convert.ToUInt16(dynamicProperties.Values["TextureId"]);
-
+                                // This is the path vanilla code takes
+                                blockTextureData.ID = int.Parse(xmlElement.GetAttribute("id"));
+                                if (props.Values.ContainsKey("TextureId"))
+                                    blockTextureData.TextureID = Convert.ToUInt16(props.Values["TextureId"]);
                             }
-
                             blockTextureData.LocalizedName = Localization.Get(blockTextureData.Name);
-                            if (dynamicProperties.Values.ContainsKey("Group"))
-                                blockTextureData.Group = dynamicProperties.Values["Group"];
-                            blockTextureData.PaintCost = !dynamicProperties.Values.ContainsKey("PaintCost") ?
-                                (ushort)1 : Convert.ToUInt16(dynamicProperties.Values["PaintCost"]);
-                            if (dynamicProperties.Values.ContainsKey("Hidden"))
-                                blockTextureData.Hidden = Convert.ToBoolean(dynamicProperties.Values["Hidden"]);
-                            if (dynamicProperties.Values.ContainsKey("SortIndex"))
-                                blockTextureData.SortIndex = Convert.ToByte(dynamicProperties.Values["SortIndex"]);
-
+                            if (props.Values.ContainsKey("Group"))
+                                blockTextureData.Group = props.Values["Group"];
+                            blockTextureData.PaintCost = !props.Values.ContainsKey("PaintCost") ?
+                                (ushort)1 : Convert.ToUInt16(props.Values["PaintCost"]);
+                            if (props.Values.ContainsKey("Hidden"))
+                                blockTextureData.Hidden = Convert.ToBoolean(props.Values["Hidden"]);
+                            if (props.Values.ContainsKey("SortIndex"))
+                                blockTextureData.SortIndex = Convert.ToByte(props.Values["SortIndex"]);
                             blockTextureData.Init();
-
                         }
-                        else if (current.NodeType == XmlNodeType.Element && current.Name.Equals("terrain"))
+                        // terrain elements are only known by us
+                        else if (xmlElement.Name.Equals("terrain"))
                         {
-
-                            XmlElement xmlElement = (XmlElement)current;
-                            DynamicProperties dynamicProperties = new DynamicProperties();
-                            foreach (XmlNode childNode in xmlElement.ChildNodes)
-                            {
-                                if (childNode.NodeType == XmlNodeType.Element && childNode.Name.Equals("property"))
-                                    dynamicProperties.Add(childNode);
-                            }
-
-                            var mesh = MeshDescription.meshes[MeshDescription.MESH_TERRAIN];
-                            var texture = new TexInfo(xmlElement, dynamicProperties);
-                            PatchTerrainAtlas(mesh, texture);
-
+                            DynamicProperties props = GetDynamicProperties(xmlElement);
+                            var texture = new TextureConfig(xmlElement, props);
+                            texture.tiling.index = builtinTerrains + TerrainsAdded;
+                            PatchAtlasTerrain(terrain, texture);
+                            TerrainsAdded += texture.Length;
+                            CustomTerrains.Add(texture);
                         }
+                    }
+                    if (OpaquesAdded > 0)
+                    {
+                        // Apply pixel changes only when finished
+                        // Reduces loading times to nearly instantly
+                        ApplyPixelChanges(opaqueAtlas.diffuseTexture, false);
+                        ApplyPixelChanges(opaqueAtlas.normalTexture, false);
+                        ApplyPixelChanges(opaqueAtlas.specularTexture, false);
+                        opaque.ReloadTextureArrays(false);
+                    }
+                    if (TerrainsAdded > 0)
+                    {
+                        // Apply pixel changes only when finished
+                        // Reduces loading times to nearly instantly
+                        // Note: we don't alter MicroSplat-Maps yet
+                        //ApplyPixelChanges(terrainAtlas.diffuseTexture, false);
+                        //ApplyPixelChanges(terrainAtlas.normalTexture, false);
+                        //ApplyPixelChanges(terrainAtlas.specularTexture, false);
+                        //terrain.ReloadTextureArrays(false);
                     }
                     yield break;
                 }
@@ -676,21 +458,10 @@ public class OcbCustomTextures : IModApi
             ref IEnumerator __result)
         {
             BlockTextureData.InitStatic();
-            var myEnumerator = new SimpleEnumerator(_xmlFile);
-            __result = myEnumerator.GetEnumerator();
+            var patchedEnumerator = new PatchedEnumerator(_xmlFile);
+            __result = patchedEnumerator.GetEnumerator();
             return false;
         }
-    }
-
-    static Texture2D ResizeTexture(Texture2D texture2D, int width, int height, bool color32)
-    {
-        RenderTexture rt = new RenderTexture(width, height, color32 ? 32 : 24);
-        RenderTexture.active = rt;
-        Graphics.Blit(texture2D, rt);
-        Texture2D resize = new Texture2D(width, height);
-        resize.ReadPixels(new Rect(0, 0, width, height), 0, 0);
-        resize.Apply(true);
-        return resize;
     }
 
     [HarmonyPatch(typeof(int))]
@@ -713,23 +484,29 @@ public class OcbCustomTextures : IModApi
 
     }
 
-    [HarmonyPatch(typeof(MeshDescription))]
-    [HarmonyPatch("Init")]
-    public class MeshDescription_Init
+    [HarmonyPatch(typeof(TextureAtlasBlocks))]
+    [HarmonyPatch("Cleanup")]
+    public class TextureAtlasBlocks_Cleanup
     {
-        static void Postfix(int _idx, ref TextureAtlas _ta)
+        public static bool Prefix(TextureAtlasBlocks __instance)
         {
-            if (Dump == false) return;
-            DumpedDiffuse = 0; DumpedSpecular = 0; DumpedNormal = 0;
-            System.IO.Directory.CreateDirectory("export");
-            System.IO.Directory.CreateDirectory("export/opaque");
-            System.IO.Directory.CreateDirectory("export/terrain");
-            System.IO.Directory.CreateDirectory("export/decals");
-            // if (_idx == MeshDescription.MESH_OPAQUE) DumpAtlas(_ta, "opaque");
-            if (_idx == MeshDescription.MESH_TERRAIN) DumpTerrainAtlas(_ta, "terrain");
-            if (_idx == MeshDescription.MESH_DECALS) DumpTerrainAtlas(_ta, "decals");
+            CleanupTextureAtlasBlocks(__instance);
+            Resources.UnloadUnusedAssets();
+            return false;
         }
+    }
 
+    [HarmonyPatch(typeof(TextureAtlasTerrain))]
+    [HarmonyPatch("Cleanup")]
+    public class TextureAtlasTerrain_Cleanup
+    {
+        public static bool Prefix(TextureAtlasTerrain __instance)
+        {
+            CleanupTextureAtlasBlocks(__instance);
+            CleanupTextureAtlasTerrain(__instance);
+            Resources.UnloadUnusedAssets();
+            return false;
+        }
     }
 
 }
