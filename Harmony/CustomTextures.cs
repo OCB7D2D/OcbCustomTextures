@@ -36,8 +36,8 @@ public class OcbCustomTextures : IModApi
     public void InitMod(Mod mod)
     {
         Debug.Log("Loading OCB Texture Atlas Patch: " + GetType().ToString());
-        if (GameManager.IsDedicatedServer) return; // Don't patch server instance
         new Harmony(GetType().ToString()).PatchAll(Assembly.GetExecutingAssembly());
+        if (GameManager.IsDedicatedServer) return; // Don't patch server instance
         ModEvents.GameStartDone.RegisterHandler(GameStartDone);
         ModEvents.GameShutdown.RegisterHandler(GameShutdown);
     }
@@ -118,16 +118,24 @@ public class OcbCustomTextures : IModApi
         if (atlas == null) throw new Exception("INVALID ATLAS TYPE");
         var textureID = atlas.uvMapping.Length;
 
-        if (!(atlas.diffuseTexture is Texture2DArray tex2Darr))
-        { 
-            throw new Exception("Expected Texture2DArray");
-        }
-
         // Log.Out("Adding opaque texture {0} at uvMapping[{1}] with index[{2}]", tex.ID, textureID, tex.tiling.index);
 
         if (!UvMap.ContainsKey(tex.ID)) UvMap[tex.ID] = textureID;
         else if (UvMap[tex.ID] != textureID) Log.Warning(
                  "Overwriting texture key {0}", tex.ID);
+
+        if (GameManager.IsDedicatedServer)
+        {
+            if (atlas.uvMapping.Length < textureID + 1)
+                Array.Resize(ref atlas.uvMapping, textureID + 1);
+            atlas.uvMapping[textureID] = tex.tiling;
+            return textureID;
+        }
+
+        if (!(atlas.diffuseTexture is Texture2DArray tex2Darr))
+        {
+            throw new Exception("Expected Texture2DArray");
+        }
 
         PatchOpaqueTexture(ref tex2Darr, tex.Diffuse, tex.tiling.index);
 
@@ -181,6 +189,14 @@ public class OcbCustomTextures : IModApi
         if (!UvMap.ContainsKey(tex.ID)) UvMap[tex.ID] = textureID;
         else if (UvMap[tex.ID] != textureID) Log.Warning(
                  "Overwriting texture key {0}", tex.ID);
+
+        if (GameManager.IsDedicatedServer)
+        {
+            if (atlas.uvMapping.Length < textureID + 1)
+                Array.Resize(ref atlas.uvMapping, textureID + 1);
+            atlas.uvMapping[textureID] = tex.tiling;
+            return textureID;
+        }
 
         // Make sure all our arrays really have enough space
         // This should already have happened for better performance
@@ -305,7 +321,8 @@ public class OcbCustomTextures : IModApi
                 var terrainAtlas = terrain.textureAtlas as TextureAtlasTerrain;
 
                 int builtinTerrains = terrainAtlas.diffuse.Length;
-                int builtinOpaques = (opaqueAtlas.diffuseTexture as Texture2DArray).depth;
+                int builtinOpaques = opaqueAtlas.diffuseTexture == null ? 
+                    0 : (opaqueAtlas.diffuseTexture as Texture2DArray).depth;
 
                 /* PRE-PARSE STEP TO DETERMINE FINAL NUMBERS FIRST */
 
@@ -334,7 +351,7 @@ public class OcbCustomTextures : IModApi
 
                 /* ADD SPACE FOR ADDITIONAL TEXTURES IN ONE GO FOR BEST PERFORMANCE */
 
-                if (OpaquesAdded > 0)
+                if (OpaquesAdded > 0 && !GameManager.IsDedicatedServer)
                 {
                     if (opaque.TexDiffuse is Texture2DArray diff2DArr)
                     {
@@ -358,7 +375,7 @@ public class OcbCustomTextures : IModApi
                     }
                 }
 
-                if (TerrainsAdded > 0)
+                if (TerrainsAdded > 0 && !GameManager.IsDedicatedServer)
                 {
                     Array.Resize(ref terrainAtlas.diffuse, terrainAtlas.diffuse.Length + TerrainsAdded);
                     Array.Resize(ref terrainAtlas.normal, terrainAtlas.normal.Length + TerrainsAdded);
@@ -424,7 +441,7 @@ public class OcbCustomTextures : IModApi
                             CustomTerrains.Add(texture);
                         }
                     }
-                    if (OpaquesAdded > 0)
+                    if (OpaquesAdded > 0 && !GameManager.IsDedicatedServer)
                     {
                         // Apply pixel changes only when finished
                         // Reduces loading times to nearly instantly
@@ -433,7 +450,7 @@ public class OcbCustomTextures : IModApi
                         ApplyPixelChanges(opaqueAtlas.specularTexture, false);
                         opaque.ReloadTextureArrays(false);
                     }
-                    if (TerrainsAdded > 0)
+                    if (TerrainsAdded > 0 && !GameManager.IsDedicatedServer)
                     {
                         // Apply pixel changes only when finished
                         // Reduces loading times to nearly instantly
@@ -490,6 +507,7 @@ public class OcbCustomTextures : IModApi
     {
         public static bool Prefix(TextureAtlasBlocks __instance)
         {
+            if (GameManager.IsDedicatedServer) return true;
             CleanupTextureAtlasBlocks(__instance);
             Resources.UnloadUnusedAssets();
             return false;
@@ -502,6 +520,7 @@ public class OcbCustomTextures : IModApi
     {
         public static bool Prefix(TextureAtlasTerrain __instance)
         {
+            if (GameManager.IsDedicatedServer) return true;
             CleanupTextureAtlasBlocks(__instance);
             CleanupTextureAtlasTerrain(__instance);
             Resources.UnloadUnusedAssets();

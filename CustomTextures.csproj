@@ -83,6 +83,9 @@
     <Compile Include="Library\TextureAssetUrl.cs" />
     <Compile Include="Library\TextureUtils.cs" />
   </ItemGroup>
-  <ItemGroup />
+  <ItemGroup>
+    <Content Include="ModInfo.xml" />
+    <Content Include="README.md" />
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

@@ -135,6 +135,10 @@ Reminds me of some work I've done years ago to create web-sprites.
 
 ## Changelog
 
+### Version 0.2.1
+
+- Fix for dedicated servers
+
 ### Version 0.2.0
 
 - Major code refactoring
