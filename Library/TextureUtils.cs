@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Experimental.Rendering;
 
@@ -204,24 +205,8 @@ namespace OCB
             return pixels;
         }
 
-        static public void DumpTexure(Texture tex, string path,
-            Func<Color[], Color[]> converter = null)
-        {
-            if (tex is Texture2DArray arr)
-            {
-                DumpTexure(arr, path, converter);
-            }
-            else if (tex is Texture2D tex2d)
-            {
-                DumpTexure(tex2d, path, converter);
-            }
-            else if (tex != null)
-            {
-                Log.Error("Invalid texture to dump " + tex);
-            }
-        }
 
-        static public void DumpTexure(Texture2D tex, string path,
+        static public void DumpTexure2D(Texture2D tex, string path,
             Func<Color32[], Color32[]> converter = null)
         {
             if (tex == null) return;
@@ -235,7 +220,7 @@ namespace OCB
             System.IO.File.WriteAllBytes(path, bytes);
         }
 
-        static public void DumpTexure(Texture2DArray arr, int idx, string path,
+        static public void DumpTexureArr(Texture2DArray arr, int idx, string path,
             Func<Color32[], Color32[]> converter = null)
         {
             if (arr == null) return;
@@ -258,24 +243,66 @@ namespace OCB
             System.IO.File.WriteAllBytes(path, bytes);
         }
 
+        static public List<Texture2D> GetAtlasSprites(Texture2D atlas, List<UVRectTiling> tiles)
+        {
+            List<Texture2D> sprites = new List<Texture2D>();
+            // Copy full atlas to render texture so we can read back from it
+            RenderTexture rt = new RenderTexture(atlas.width, atlas.height, 32);
+            RenderTexture.active = rt;
+            Graphics.Blit(atlas, rt);
+            foreach (UVRectTiling tile in tiles)
+            {
+                int x = (int)(atlas.width * tile.uv.x) - 34;
+                int w = (int)(atlas.width * tile.uv.width) + 68;
+                int y = (int)(atlas.height * tile.uv.y) - 34;
+                int h = (int)(atlas.height * tile.uv.height) + 68;
+                y = atlas.height - y - h;
+                // Read back the part for this UV sprite
+                Texture2D sprite = new Texture2D(w, w);
+                sprite.ReadPixels(new Rect(x, y, w, h), 0, 0);
+                sprite.Apply(true);
+                sprites.Add(sprite);
+            }
+            return sprites;
+        }
+
+
+        static public void DumpTexure(Texture tex, string path,
+            Func<Color32[], Color32[]> converter = null)
+        {
+            if (tex is Texture2DArray arr)
+            {
+                Log.Error("Not implemented");
+                // DumpTexureArr(arr, path, converter);
+            }
+            else if (tex is Texture2D tex2d)
+            {
+                DumpTexure2D(tex2d, path, converter);
+            }
+            else if (tex != null)
+            {
+                Log.Error("Invalid texture to dump " + tex);
+            }
+        }
+
         static public void DumpNormal(Texture2DArray arr, int idx, string path)
         {
-            DumpTexure(arr, idx, path, UnpackNormalPixels);
+            DumpTexureArr(arr, idx, path, UnpackNormalPixels);
         }
 
         static public void DumpNormal(Texture2D tex, string path)
         {
-            DumpTexure(tex, path, UnpackNormalPixels);
+            DumpTexure2D(tex, path, UnpackNormalPixels);
         }
 
         static public void DumpSpecular(Texture2DArray arr, int idx, string path)
         {
-            DumpTexure(arr, idx, path, UnpackSpecularPixels);
+            DumpTexureArr(arr, idx, path, UnpackSpecularPixels);
         }
 
         static public void DumpSpecular(Texture2D tex, string path)
         {
-            DumpTexure(tex, path, UnpackSpecularPixels);
+            DumpTexure2D(tex, path, UnpackSpecularPixels);
         }
 
     }

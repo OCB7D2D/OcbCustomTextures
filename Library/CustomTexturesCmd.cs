@@ -49,7 +49,7 @@ public class CustomTexturesCmd : ConsoleCmdAbstract
         {
             for (int i = 0; i < diff.depth; i++)
             {
-                DumpTexure(diff, i, string.Format(
+                DumpTexureArr(diff, i, string.Format(
                     "{0}/atlas.{1}.diffuse.png", path, i));
             }
         }

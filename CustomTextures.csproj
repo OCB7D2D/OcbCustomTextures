@@ -78,6 +78,7 @@
   <ItemGroup>
     <Compile Include="Library\CustomTexturesCmd.cs" />
     <Compile Include="Harmony\CustomTextures.cs" />
+    <Compile Include="Library\NormalMapTools.cs" />
     <Compile Include="Library\TextureAtlasUtils.cs" />
     <Compile Include="Library\TextureConfig.cs" />
     <Compile Include="Library\TextureAssetUrl.cs" />
