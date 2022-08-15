@@ -1,6 +1,9 @@
 using UnityEngine;
 using System.Collections.Generic;
 using static OCB.TextureUtils;
+using System.Xml;
+using System.IO;
+using System.Collections;
 
 public class CustomTexturesCmd : ConsoleCmdAbstract
 {
@@ -49,8 +52,8 @@ public class CustomTexturesCmd : ConsoleCmdAbstract
         {
             for (int i = 0; i < diff.depth; i++)
             {
-                DumpTexure(diff, i, string.Format(
-                    "{0}/atlas.{1}.diffuse.png", path, i));
+                DumpTexureArr(diff, i, string.Format(
+                    "{0}/array.{1}.diffuse.png", path, i));
             }
         }
         else if (atlas.diffuseTexture is Texture2D tex2d)
@@ -68,7 +71,7 @@ public class CustomTexturesCmd : ConsoleCmdAbstract
             for (int i = 0; i < norm.depth; i++)
             {
                 DumpNormal(norm, i, string.Format(
-                    "{0}/atlas.{1}.normal.png", path, i));
+                    "{0}/array.{1}.normal.png", path, i));
             }
         }
         else if (atlas.normalTexture is Texture2D tex2d)
@@ -86,7 +89,7 @@ public class CustomTexturesCmd : ConsoleCmdAbstract
             for (int i = 0; i < spec.depth; i++)
             {
                 DumpSpecular(spec, i, string.Format(
-                    "{0}/atlas.{1}.specular.png", path, i));
+                    "{0}/array.{1}.specular.png", path, i));
             }
         }
         else if (atlas.specularTexture is Texture2D tex2d)
@@ -104,7 +107,7 @@ public class CustomTexturesCmd : ConsoleCmdAbstract
             for (int i = 0; i < occl.depth; i++)
             {
                 DumpSpecular(occl, i, string.Format(
-                    "{0}/atlas.{1}.occlusion.png", path, i));
+                    "{0}/array.{1}.occlusion.png", path, i));
             }
         }
         else if (atlas.occlusionTexture is Texture2D tex2d)
@@ -122,7 +125,7 @@ public class CustomTexturesCmd : ConsoleCmdAbstract
             for (int i = 0; i < emis.depth; i++)
             {
                 DumpSpecular(emis, i, string.Format(
-                    "{0}/atlas.{1}.emission.png", path, i));
+                    "{0}/array.{1}.emission.png", path, i));
             }
         }
         else if (atlas.emissionTexture is Texture2D tex2d)
@@ -201,7 +204,7 @@ public class CustomTexturesCmd : ConsoleCmdAbstract
                     break;
                 case "uvs":
                     var uvs = GetMesh(_params[1]).textureAtlas.uvMapping;
-                    for(var i = 0; i < uvs.Length; i++)
+                    for (var i = 0; i < uvs.Length; i++)
                     {
                         if (string.IsNullOrEmpty(uvs[i].textureName)) continue;
                         Log.Out("{0}: {1} {2}", i, uvs[i].textureName, uvs[i].ToString());

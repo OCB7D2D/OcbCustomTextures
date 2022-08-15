@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using UnityEngine.Experimental.Rendering;
 using static OCB.TextureUtils;
 using static OCB.TextureAtlasUtils;
+using System.IO;
 
 public class OcbCustomTextures : IModApi
 {
@@ -28,10 +29,14 @@ public class OcbCustomTextures : IModApi
     // A static list of additional texture (used for hot reload)
     static readonly List<TextureConfig> CustomOpaques = new List<TextureConfig>();
     static readonly List<TextureConfig> CustomTerrains = new List<TextureConfig>();
+    static readonly List<TextureConfig> CustomDecals = new List<TextureConfig>();
+    public static readonly List<TextureConfig> CustomGrass = new List<TextureConfig>();
 
     // Counter how many individual textures are added
     static int OpaquesAdded = 0;
     static int TerrainsAdded = 0;
+    static int DecalsAdded = 0;
+    static int GrassAdded = 0;
 
     public void InitMod(Mod mod)
     {
@@ -202,17 +207,17 @@ public class OcbCustomTextures : IModApi
         // This should already have happened for better performance
         if (atlas.diffuse.Length <= tex.tiling.index)
         {
-            Log.Out("Resize diffuse to {0}", tex.tiling.index + 1);
+            Log.Warning("Resize diffuse to {0}", tex.tiling.index + 1);
             Array.Resize(ref atlas.diffuse, tex.tiling.index + 1);
         }
         if (atlas.normal.Length <= tex.tiling.index)
         {
-            Log.Out("Resize normal to {0}", tex.tiling.index + 1);
+            Log.Warning("Resize normal to {0}", tex.tiling.index + 1);
             Array.Resize(ref atlas.normal, tex.tiling.index + 1);
         }
         if (atlas.specular.Length <= tex.tiling.index)
         {
-            Log.Out("Resize specular to {0}", tex.tiling.index + 1);
+            Log.Warning("Resize specular to {0}", tex.tiling.index + 1);
             Array.Resize(ref atlas.specular, tex.tiling.index + 1);
         }
 
@@ -311,6 +316,8 @@ public class OcbCustomTextures : IModApi
             // Patched BlockTexturesFromXML.CreateBlockTextures
             public IEnumerator GetEnumerator()
             {
+                MicroStopwatch msw = new MicroStopwatch(true);
+
                 XmlElement documentElement = XmlFile.XmlDoc.DocumentElement;
                 if (documentElement.ChildNodes.Count == 0)
                     throw new Exception("No element <block_textures> found!");
@@ -440,7 +447,25 @@ public class OcbCustomTextures : IModApi
                             TerrainsAdded += texture.Length;
                             CustomTerrains.Add(texture);
                         }
+                        // decal elements are only known by us
+                        else if (xmlElement.Name.Equals("decal"))
+                        {
+                            DynamicProperties props = GetDynamicProperties(xmlElement);
+                            var texture = new TextureConfig(xmlElement, props);
+                            DecalsAdded += texture.Length;
+                            CustomDecals.Add(texture);
+                        }
+                        // grass elements are only known by us
+                        else if (xmlElement.Name.Equals("grass"))
+                        {
+                            DynamicProperties props = GetDynamicProperties(xmlElement);
+                            var texture = new TextureConfig(xmlElement, props);
+                            GrassAdded += texture.Length;
+                            CustomGrass.Add(texture);
+                        }
                     }
+                    // EO read XML
+
                     if (OpaquesAdded > 0 && !GameManager.IsDedicatedServer)
                     {
                         // Apply pixel changes only when finished
@@ -449,7 +474,10 @@ public class OcbCustomTextures : IModApi
                         ApplyPixelChanges(opaqueAtlas.normalTexture, false);
                         ApplyPixelChanges(opaqueAtlas.specularTexture, false);
                         opaque.ReloadTextureArrays(false);
+                        Log.Out("Opaque textures patched in {0}ms",
+                            msw.ElapsedMilliseconds);
                     }
+
                     if (TerrainsAdded > 0 && !GameManager.IsDedicatedServer)
                     {
                         // Apply pixel changes only when finished
@@ -460,6 +488,128 @@ public class OcbCustomTextures : IModApi
                         //ApplyPixelChanges(terrainAtlas.specularTexture, false);
                         //terrain.ReloadTextureArrays(false);
                     }
+
+                    // Experimental Grass Atlas Patching
+                    if (GrassAdded > 0 && !GameManager.IsDedicatedServer)
+                    {
+
+                        msw = new MicroStopwatch(true);
+
+                        List<UVRectTiling> tiles = new List<UVRectTiling>();
+                        MeshDescription grass = MeshDescription.meshes[MeshDescription.MESH_GRASS];
+                        // DumpTexure2D(grass.TexDiffuse as Texture2D, "Mods/OcbCustomTextures/grass-atlas.png");
+
+                        var xmlcfg = new XmlFile(grass.MetaData);
+                        var xmldoc = xmlcfg.XmlDoc.DocumentElement;
+                        foreach (XmlNode xmlNode in xmldoc.ChildNodes)
+                        {
+                            if (xmlNode.NodeType == XmlNodeType.Element && xmlNode.Name.Equals("uv"))
+                            {
+                                if (!(xmlNode is XmlElement xmlElement)) continue;
+                                int id = int.Parse(xmlElement.GetAttribute("id"));
+                                grass.textureAtlas.uvMapping[id].index = id;
+                                tiles.Add(grass.textureAtlas.uvMapping[id]);
+                            }
+                        }
+
+                        // Read all sprites from the Atlas back, so we can add more sprites
+                        List<Texture2D> diffuses = GetAtlasSprites(grass.TexDiffuse as Texture2D, tiles);
+                        List<Texture2D> normals = GetAtlasSprites(grass.TexNormal as Texture2D, tiles);
+                        List<Texture2D> speculars = GetAtlasSprites(grass.TexSpecular as Texture2D, tiles);
+
+                        // Dump out all sliced textures to check validity
+                        // for (int i = 0; i < diffuses.Count; i += 1)
+                        // {
+                        //     DumpTexure(CropTexture(diffuses[i], 34, 34, true), string.Format("Mods/OcbCustomTextures/Dump/{0}.albedo.png", i));
+                        //     DumpTexure(CropTexture(normals[i], 34, 34, true), string.Format("Mods/OcbCustomTextures/Dump/{0}.normal.png", i), UnpackNormalPixels);
+                        //     DumpTexure(CropTexture(speculars[i], 34, 34, true), string.Format("Mods/OcbCustomTextures/Dump/{0}.aost.png", i));
+                        // }
+
+                        foreach (TextureConfig custom in CustomGrass)
+                        {
+
+                            if (custom.Diffuse.Assets.Length == 0) continue;
+                            // For now just must pass all three maps (no runtime creation)
+                            diffuses.Add(PadTexture(custom.Diffuse.LoadTexture2D(), 34));
+                            normals.Add(PadTexture(custom.Normal.LoadTexture2D(), 34));
+                            speculars.Add(PadTexture(custom.Specular.LoadTexture2D(), 34));
+
+                            UVRectTiling tile = new UVRectTiling();
+                            tile.uv = new Rect(); // Create objects on struct
+                            tile.index = GetNextFreeUV(grass.textureAtlas);
+                            if (!UvMap.ContainsKey(custom.ID)) UvMap[custom.ID] = tile.index;
+                            else if (UvMap[custom.ID] != tile.index) Log.Warning(
+                                     "Tried to overwrite texture key {0}", custom.ID);
+                            tile.textureName = custom.Diffuse.Assets[0];
+                            tiles.Add(tile);
+                        }
+
+                        var t2d = grass.TexDiffuse as Texture2D;
+                        var t2n = grass.TexNormal as Texture2D;
+                        var t2s = grass.TexSpecular as Texture2D;
+
+                        // DumpTexure2D(t2d, "Mods/OcbCustomTextures/org-grass-diff-atlas.png");
+                        // DumpTexure2D(t2n, "Mods/OcbCustomTextures/org-grass-norm-atlas.png");
+                        // DumpTexure2D(t2s, "Mods/OcbCustomTextures/org-grass-spec-atlas.png");
+
+                        Texture2D diff_atlas = new Texture2D(8192, 8192, t2d.format, false);
+                        Texture2D norm_atlas = new Texture2D(8192, 8192, t2n.format, false);
+                        Texture2D spec_atlas = new Texture2D(8192, 8192, t2s.format, false);
+
+                        // We are assuming that "PackTextures" returns the same results for each variant.
+                        // All list have the same dimension and should therefore be distributed the same.
+                        // If that proves to be shaky, we're fucked, as there is only one UV map for all.
+                        var diff_rects = diff_atlas.PackTextures(diffuses.ToArray(), 0, 8192, false);
+                        var norm_rects = norm_atlas.PackTextures(normals.ToArray(), 0, 8192, false);
+                        var spec_rects = spec_atlas.PackTextures(speculars.ToArray(), 0, 8192, false);
+                        // ToDo: we assume we get the same results back from all three calls
+
+                        // DumpTexure2D(diff_atlas, "Mods/OcbCustomTextures/patched-grass-diff-atlas.png");
+                        // DumpTexure2D(norm_atlas, "Mods/OcbCustomTextures/patched-grass-norm-atlas.png");
+                        // DumpTexure2D(spec_atlas, "Mods/OcbCustomTextures/patched-grass-spec-atlas.png");
+
+                        // Deduce new UV coordinates after packing
+                        for (int i = 0; i < tiles.Count; i++)
+                        {
+                            var tile = tiles[i];
+                            if (tile.index == 0) continue;
+                            var rect = diff_rects[i];
+                            var org = grass.textureAtlas.uvMapping[tile.index].uv;
+                            grass.textureAtlas.uvMapping[tile.index].blockH = 1;
+                            grass.textureAtlas.uvMapping[tile.index].blockW = 1;
+                            grass.textureAtlas.uvMapping[tile.index].bGlobalUV = false;
+                            rect.x = (rect.x * diff_atlas.width + 34f) / diff_atlas.width;
+                            rect.y = (rect.y * diff_atlas.height + 34f) / diff_atlas.height;
+                            rect.width = (rect.width * diff_atlas.width - 68f) / diff_atlas.width;
+                            rect.height = (rect.height * diff_atlas.height - 68f) / diff_atlas.height;
+                            grass.textureAtlas.uvMapping[tile.index].uv.Set(
+                                rect.x, rect.y, rect.width, rect.height);
+                            var uv = grass.textureAtlas.uvMapping[tile.index];
+                            uv.textureName = tile.textureName;
+                        }
+
+                        grass.TexDiffuse = diff_atlas;
+                        grass.TexNormal = norm_atlas;
+                        grass.TexSpecular = spec_atlas;
+
+                        grass.textureAtlas.diffuseTexture = diff_atlas;
+                        grass.textureAtlas.normalTexture = norm_atlas;
+                        grass.textureAtlas.specularTexture = spec_atlas;
+
+                        // grass.ReloadTextureArrays(false);
+
+                        grass.material.SetTexture("_Albedo", grass.textureAtlas.diffuseTexture);
+                        grass.material.SetTexture("_Normal", grass.textureAtlas.normalTexture);
+                        grass.material.SetTexture("_Gloss_AO_SSS", grass.textureAtlas.specularTexture);
+
+                        Log.Out("Grass textures atlas patched in {0}ms",
+                            msw.ElapsedMilliseconds);
+
+                    }
+
+                    // Decals patching removed for now since due to available space
+                    // in raw block data => 4 bits, 16 different decals max.
+
                     yield break;
                 }
                 finally
@@ -467,6 +617,32 @@ public class OcbCustomTextures : IModApi
                     if (enumerator is IDisposable disposable2)
                         disposable2.Dispose();
                 }
+            }
+
+            private Texture2D PadTexture(Texture2D tex, int padding)
+            {
+                // So far we only support 512x512 sized textures (needs more testing)
+                // tex = ResizeTexture(tex, tex.width + 68, tex.height + 68, false, 34, 34);
+                RenderTexture rt = new RenderTexture(tex.width, tex.height, padding);
+                RenderTexture.active = rt;
+                GL.Clear(true, true, Color.clear);
+                Graphics.Blit(tex, rt, new Vector2(1, 1), new Vector2(0, 0));
+                Texture2D resize = new Texture2D(tex.width + 68, tex.height + padding * 2);
+                // Really? No utility to create a clear Texture2D?
+                Color32[] resetColorArray = resize.GetPixels32();
+                for (int i = 0; i < resetColorArray.Length; i++)
+                    resetColorArray[i] = Color.clear;
+                resize.SetPixels32(resetColorArray);
+                resize.ReadPixels(new Rect(0, 0, tex.width, tex.height), padding, padding);
+                resize.Apply(true);
+                return resize;
+            }
+
+            private int GetNextFreeUV(TextureAtlas textureAtlas)
+            {
+                int id = textureAtlas.uvMapping.Length;
+                Array.Resize(ref textureAtlas.uvMapping, id + 1);
+                return id;
             }
         }
 
