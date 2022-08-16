@@ -30,7 +30,7 @@ public class OcbCustomTextures : IModApi
     static readonly List<TextureConfig> CustomOpaques = new List<TextureConfig>();
     static readonly List<TextureConfig> CustomTerrains = new List<TextureConfig>();
     static readonly List<TextureConfig> CustomDecals = new List<TextureConfig>();
-    static readonly List<TextureConfig> CustomGrass = new List<TextureConfig>();
+    public static readonly List<TextureConfig> CustomGrass = new List<TextureConfig>();
 
     // Counter how many individual textures are added
     static int OpaquesAdded = 0;
@@ -491,6 +491,8 @@ public class OcbCustomTextures : IModApi
                         MeshDescription grass = MeshDescription.meshes[MeshDescription.MESH_GRASS];
                         // DumpTexure2D(grass.TexDiffuse as Texture2D, "Mods/OcbCustomTextures/grass-atlas.png");
 
+                        Log.Out("Extracting Textures from existing Grass Atlas");
+
                         var xmlcfg = new XmlFile(grass.MetaData);
                         var xmldoc = xmlcfg.XmlDoc.DocumentElement;
                         foreach (XmlNode xmlNode in xmldoc.ChildNodes)
@@ -509,72 +511,40 @@ public class OcbCustomTextures : IModApi
                         List<Texture2D> normals = GetAtlasSprites(grass.TexNormal as Texture2D, tiles);
                         List<Texture2D> speculars = GetAtlasSprites(grass.TexSpecular as Texture2D, tiles);
 
+                        Log.Out("Loading Custom Grass Textures");
+
+                        int count = 0;
+
                         foreach (TextureConfig custom in CustomGrass)
                         {
+                            count++;
                             if (custom.Diffuse.Assets.Length == 0) continue;
                             Texture2D filteredTex = null;
-                            var url = custom.Diffuse.Assets[0];
-                            var data = File.ReadAllBytes(url);
-                            var tex = new Texture2D(2, 2);
-                            tex.LoadImage(data);
-
-                            // So far we only support 512x512 sized textures (needs more testing)
-                            // tex = ResizeTexture(tex, tex.width + 68, tex.height + 68, false, 34, 34);
-                            RenderTexture rt = new RenderTexture(tex.width, tex.height, 32);
-                            RenderTexture.active = rt;
-                            GL.Clear(true, true, Color.clear);
-                            Graphics.Blit(tex, rt, new Vector2(1, 1), new Vector2(0, 0));
-                            Texture2D resize = new Texture2D(tex.width + 68, tex.height + 68);
-                            // Really? No utility to create a clear Texture2D?
-                            Color32[] resetColorArray = resize.GetPixels32();
-                            for (int i = 0; i < resetColorArray.Length; i++)
-                                resetColorArray[i] = Color.clear;
-                            resize.SetPixels32(resetColorArray);
-                            resize.ReadPixels(new Rect(0, 0, tex.width, tex.height), 34, 34);
-                            resize.Apply(true);
-                            tex = resize;
+                            var tex = custom.Diffuse.LoadTexture2D();
+                            tex = PadTexture(tex, 34);
 
                             diffuses.Add(tex);
 
                             if (custom.Normal == null)
                             {
                                 if (filteredTex == null) filteredTex = NormalMapTools.FilterMedian(tex, 5);
-                                normals.Add(NormalMapTools.CreateNormalmap(filteredTex, 2, true));
+                                normals.Add(NormalMapTools.CreateNormalmap(filteredTex, 4, true));
                             }
                             else
                             {
-                                var norm_url = custom.Normal.Assets[0];
-                                var norm_data = File.ReadAllBytes(norm_url);
-                                var norm_tex = new Texture2D(2, 2);
-                                norm_tex.LoadImage(norm_data);
-                                normals.Add(norm_tex);
+                                normals.Add(PadTexture(custom.Normal.LoadTexture2D(), 34));
                             }
 
                             if (custom.Specular == null)
                             {
                                 if (filteredTex == null) filteredTex = NormalMapTools.FilterMedian(tex, 5);
-                                Texture2D spec = NormalMapTools.CreateSpecular(filteredTex, 1.2f, 0.5f);
-                                for (int y = 0; y < spec.height; y++)
-                                    for (int x = 0; x < spec.width; x++)
-                                    {
-                                        var org = tex.GetPixel(x, y);
-                                        var px = spec.GetPixel(x, y);
-                                        px.r = 0;
-                                        px.b = 0.25f; // translucency?
-                                        px.g = 1f;
-                                        px.a = org.a;
-                                        spec.SetPixel(x, y, px);
-                                    }
-                                spec.Apply(false);
+                                DumpTexure(tex, string.Format("Mods/OcbCustomTextures/{0}-med.png", count));
+                                Texture2D spec = NormalMapTools.CreateAOSTMap(filteredTex, custom.Props);
                                 speculars.Add(spec);
                             }
                             else
                             {
-                                var spec_url = custom.Specular.Assets[0];
-                                var spec_data = File.ReadAllBytes(spec_url);
-                                var spec_tex = new Texture2D(2, 2);
-                                spec_tex.LoadImage(spec_data);
-                                speculars.Add(spec_tex);
+                                speculars.Add(PadTexture(custom.Specular.LoadTexture2D(), 34));
                             }
 
                             UVRectTiling tile = new UVRectTiling();
@@ -583,9 +553,11 @@ public class OcbCustomTextures : IModApi
                             if (!UvMap.ContainsKey(custom.ID)) UvMap[custom.ID] = tile.index;
                             else if (UvMap[custom.ID] != tile.index) Log.Warning(
                                      "Tried to overwrite texture key {0}", custom.ID);
-                            tile.textureName = url;
+                            tile.textureName = custom.Diffuse.Assets[0];
                             tiles.Add(tile);
                         }
+
+                        Log.Out("Repackaging Grass Textures into a texture atlas");
 
                         var t2d = grass.TexDiffuse as Texture2D;
                         var t2n = grass.TexNormal as Texture2D;
@@ -599,6 +571,9 @@ public class OcbCustomTextures : IModApi
                         Texture2D norm_atlas = new Texture2D(8192, 8192, t2n.format, false);
                         Texture2D spec_atlas = new Texture2D(8192, 8192, t2s.format, false);
 
+                        // We are assuming that "PackTextures" returns the same results for each variant.
+                        // All list have the same dimension and should therefore be distributed the same.
+                        // If that proves to be shaky, we're fucked, as there is only one UV map for all.
                         var diff_rects = diff_atlas.PackTextures(diffuses.ToArray(), 0, 8192, false);
                         var norm_rects = norm_atlas.PackTextures(normals.ToArray(), 0, 8192, false);
                         var spec_rects = spec_atlas.PackTextures(speculars.ToArray(), 0, 8192, false);
@@ -653,6 +628,25 @@ public class OcbCustomTextures : IModApi
                     if (enumerator is IDisposable disposable2)
                         disposable2.Dispose();
                 }
+            }
+
+            private Texture2D PadTexture(Texture2D tex, int padding)
+            {
+                // So far we only support 512x512 sized textures (needs more testing)
+                // tex = ResizeTexture(tex, tex.width + 68, tex.height + 68, false, 34, 34);
+                RenderTexture rt = new RenderTexture(tex.width, tex.height, padding);
+                RenderTexture.active = rt;
+                GL.Clear(true, true, Color.clear);
+                Graphics.Blit(tex, rt, new Vector2(1, 1), new Vector2(0, 0));
+                Texture2D resize = new Texture2D(tex.width + 68, tex.height + padding * 2);
+                // Really? No utility to create a clear Texture2D?
+                Color32[] resetColorArray = resize.GetPixels32();
+                for (int i = 0; i < resetColorArray.Length; i++)
+                    resetColorArray[i] = Color.clear;
+                resize.SetPixels32(resetColorArray);
+                resize.ReadPixels(new Rect(0, 0, tex.width, tex.height), padding, padding);
+                resize.Apply(true);
+                return resize;
             }
 
             private int GetNextFreeUV(TextureAtlas textureAtlas)

@@ -8,6 +8,34 @@ using System.Collections.Generic;
 public static class NormalMapTools 
 {
 
+	public static Texture2D CreateAOSTMap(Texture2D t, DynamicProperties props)
+	{
+
+		float AO = 1f;
+		float MinSpecular = 0f;
+		float MaxSpecular = 1f;
+		float SpecularFactor = 1f;
+		float SpecularPower = 4f;
+		float MinTranslucency = 0f;
+		float MaxTranslucency = 1f;
+		float TranslucencyFactor = 1f;
+		float TranslucencyPower = 2f;
+
+		props.ParseFloat("AO", ref AO);
+		props.ParseFloat("MinSpecular", ref MinSpecular);
+		props.ParseFloat("MaxSpecular", ref MaxSpecular);
+		props.ParseFloat("SpecularFactor", ref SpecularFactor);
+		props.ParseFloat("SpecularPower", ref SpecularPower);
+		props.ParseFloat("MinTranslucency", ref MinTranslucency);
+		props.ParseFloat("MaxTranslucency", ref MaxTranslucency);
+		props.ParseFloat("TranslucencyFactor", ref TranslucencyFactor);
+		props.ParseFloat("TranslucencyPower", ref TranslucencyPower);
+
+		return CreateAOSTMap(t, AO,
+			MinSpecular, MaxSpecular, SpecularFactor, SpecularPower,
+			MinTranslucency, MaxTranslucency, TranslucencyFactor, TranslucencyPower);
+	}
+
 	/// <summary>
 	/// Creates the specular map
 	/// </summary>
@@ -15,32 +43,37 @@ public static class NormalMapTools
 	/// <param name="t">source texture</param>
 	/// <param name="specularContrast">Specular contrast float (example: 0-2)</param>
 	/// <param name="specularCutOff">Specular cut off float (example: 0-1)</param>
-	public static Texture2D CreateSpecular(Texture2D t, float specularContrast, float specularCutOff)
+
+	public static Texture2D CreateAOSTMap(Texture2D t, float AO = 1f,
+		float MinSpecular = 0f, float MaxSpecular = 1f, float SpecularFactor = 1f, float SpecularPower = 4f,
+		float MinTranslucency = 0f, float MaxTranslucency = 1f, float TranslucencyFactor = 1f, float TranslucencyPower = 2f)
 	{
 
 		Color[] pixels = t.GetPixels();
-		Texture2D texSpecular = new Texture2D(t.width, t.height, TextureFormat.RGB24, false, false);
 
-		for (int y=0;y<t.height;y++)
+		// Create new texture to hold Specular (R), Occlusion (G), Translucency/Smoothness (B)
+		Texture2D specular = new Texture2D(t.width, t.height, TextureFormat.RGB24, false, false);
+
+		for (int y = 0; y < t.height; y++)
 		{
-			for (int x=0;x<t.width;x++)
+			for (int x = 0; x < t.width; x++)
 			{
-//				float bw = t.GetPixel(x,y).grayscale;
-				float bw = pixels[x+y*t.width].grayscale;
-				// adjust contrast
-				bw *= bw * specularContrast;
-				bw = bw<(specularContrast*specularCutOff)?-1:bw;
-				bw = Mathf.Clamp(bw,-1,1);
-				bw *= 0.5f;
-				bw += 0.5f;
-				Color c = new Color(0,1f,0,1);
-				pixels[x+y*t.width] = c;
+				Color px = pixels[x + y * t.width];
+				// Use own formula to create specular on flowers
+				float spc = px.r * 0.45f + px.b * 0.35f + px.g * 0.2f;
+				spc = Mathf.Pow(spc * SpecularFactor, SpecularPower);
+				spc = Mathf.Lerp(MinSpecular, MaxSpecular, spc);
+				// Use own formula to create translucency on flowers
+				float tr = Mathf.Max(px.r, px.b) * 0.75f + px.g * 0.25f;
+				tr = Mathf.Pow(tr * TranslucencyFactor, TranslucencyPower);
+				tr = Mathf.Lerp(MinTranslucency, MaxTranslucency, tr);
+				pixels[x+y*t.width] = new Color(spc, AO, tr, 1);
 			}
 		}
 
-		texSpecular.SetPixels(pixels);
-		texSpecular.Apply();
-		return texSpecular;
+		specular.SetPixels(pixels);
+		specular.Apply();
+		return specular;
 	}
 
 
@@ -50,6 +83,7 @@ public static class NormalMapTools
 	/// <returns>normal map color array</returns>
 	/// <param name="t">source texture</param>
 	/// <param name="normalStrength">normal map strength float (example: 1-20)</param>
+
 	public static Texture2D CreateNormalmap(Texture2D t, float normalStrength, bool compressed = false)
 	{
 		Color[] pixels = new Color[t.width*t.height];
