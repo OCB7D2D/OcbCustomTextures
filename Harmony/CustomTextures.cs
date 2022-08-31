@@ -540,6 +540,7 @@ public class OcbCustomTextures : IModApi
                             if (!UvMap.ContainsKey(custom.ID)) UvMap[custom.ID] = tile.index;
                             else if (UvMap[custom.ID] != tile.index) Log.Warning(
                                      "Tried to overwrite texture key {0}", custom.ID);
+                            tile.index = UvMap[custom.ID]; // Assign from real UV
                             tile.textureName = custom.Diffuse.Assets[0];
                             tiles.Add(tile);
                         }
