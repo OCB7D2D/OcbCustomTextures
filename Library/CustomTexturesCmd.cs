@@ -1,9 +1,8 @@
 using UnityEngine;
 using System.Collections.Generic;
 using static OCB.TextureUtils;
-using System.Xml;
-using System.IO;
 using System.Collections;
+
 
 public class CustomTexturesCmd : ConsoleCmdAbstract
 {
@@ -191,6 +190,8 @@ public class CustomTexturesCmd : ConsoleCmdAbstract
         }
     }
 
+    public static Coroutine FooBarRunner = null;
+
     public override void Execute(List<string> _params, CommandSenderInfo _senderInfo)
     {
 
@@ -208,6 +209,59 @@ public class CustomTexturesCmd : ConsoleCmdAbstract
                     {
                         if (string.IsNullOrEmpty(uvs[i].textureName)) continue;
                         Log.Out("{0}: {1} {2}", i, uvs[i].textureName, uvs[i].ToString());
+                    }
+                    break;
+                default:
+                    Log.Warning("Unknown command " + _params[0]);
+                    break;
+            }
+        }
+        
+        else if (_params.Count == 4)
+        {
+            switch (_params[0])
+            {
+                // Use `ct dump grass` to check the generate atlas
+                // Then see which index in the "grid" you want to patch
+                // Use `ct dump grass` again to see if you got it right
+
+
+                // ct grasshelper Mods/OcbCustomTexturesPlants/UnityPlants/Assets/Flowers/flower01 5 3
+                // ct grasshelper Mods/OcbCustomTexturesPlants/UnityPlants/Assets/Flowers/flower02 5 4
+                // ct grasshelper Mods/OcbCustomTexturesPlants/UnityPlants/Assets/Flowers/flower03 5 5
+                // ct grasshelper Mods/OcbCustomTexturesPlants/UnityPlants/Assets/Flowers/flower04 5 6
+                // ct grasshelper Mods/OcbCustomTexturesPlants/UnityPlants/Assets/Flowers/flower05 6 0
+                // ct grasshelper Mods/OcbCustomTexturesPlants/UnityPlants/Assets/Flowers/flower06 6 1
+                // ct grasshelper Mods/OcbCustomTexturesPlants/UnityPlants/Assets/Flowers/flower07 6 2
+                // ct grasshelper Mods/OcbCustomTexturesPlants/UnityPlants/Assets/Flowers/flower08 6 3
+                // ct grasshelper Mods/OcbCustomTexturesPlants/UnityPlants/Assets/Flowers/flower09 6 4
+
+                // ct grasshelper Mods/OcbCustomTexturesPlants/UnityPlants/Assets/Plants/tomato.grown 6 5
+                // ct grasshelper Mods/OcbCustomTexturesPlants/UnityPlants/Assets/Plants/tomato.small 6 6
+                // ct grasshelper Mods/OcbCustomTexturesPlants/UnityPlants/Assets/Plants/wheat.grown 7 0
+                // ct grasshelper Mods/OcbCustomTexturesPlants/UnityPlants/Assets/Plants/wheat.small 7 1
+                // ct grasshelper Mods/OcbCustomTexturesPlants/UnityPlants/Assets/Plants/onion.grown 7 2
+                // ct grasshelper Mods/OcbCustomTexturesPlants/UnityPlants/Assets/Plants/onion.small 7 3
+                // ct grasshelper Mods/OcbCustomTexturesPlants/UnityPlants/Assets/Plants/cabbage.grown 7 4
+                // ct grasshelper Mods/OcbCustomTexturesPlants/UnityPlants/Assets/Plants/cabbage.small 7 5
+
+                case "grasshelper":
+                    if (FooBarRunner == null)
+                    {
+                        Log.Out("Start Develop Watcher");
+                        FooBarRunner = GameManager.Instance.
+                            StartCoroutine(HelperGrassTextures
+                                .StartGrassHelper(_params[1],
+                                    int.Parse(_params[2]),
+                                    int.Parse(_params[3])));
+                    }
+                    else
+                    {
+                        Log.Out("Stop Develop Watcher");
+                        Log.Out("Execute again to start");
+                        GameManager.Instance.
+                            StopCoroutine(FooBarRunner);
+                        FooBarRunner = null;
                     }
                     break;
                 default:

@@ -60,6 +60,23 @@ that are normally set via the `uv.xml` fragment.
 </block>
 ```
 
+## Custom grass/plant textures
+
+Grass textures are stored in an "old-school" image atlas, aka sprite atlas.
+Meaning that all textures are merged into one big texture and models/meshes
+just reference the partial square via UV coordinates. In order to patch such
+an existing atlas, we first and foremost need to know what parts are already
+used and which parts are free to re-use. In the end I implemented a pretty
+sophisticated workflow to enable patching of such atlases.
+
+- Reading existing sub-textures from the atlas
+- Done by evaluating the existing XML UV mappings
+- All sub-textures are cut out from the existing atlas
+- Then we add the newly added sub-textures to that array
+- Once done, we create a new atlas and update all UV configs
+
+See https://github.com/OCB7D2D/OcbCustomTexturesPlants for more info
+
 ## Custom Terrain Textures
 
 Terrain textures seem to use an a two folded (and confusing approach).
