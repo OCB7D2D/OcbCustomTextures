@@ -299,6 +299,11 @@ public class OcbCustomTextures : IModApi
 
     }
 
+    static List<Texture2D> GrassDiffuses = null;
+    static List<Texture2D> GrassNormals = null;
+    static List<Texture2D> GrassAOST = null;
+
+
     [HarmonyPatch(typeof(BlockTexturesFromXML))]
     [HarmonyPatch("CreateBlockTextures")]
     public class Patches
@@ -512,10 +517,15 @@ public class OcbCustomTextures : IModApi
                             }
                         }
 
-                        // Read all sprites from the Atlas back, so we can add more sprites
-                        List<Texture2D> diffuses = GetAtlasSprites(grass.TexDiffuse as Texture2D, tiles);
-                        List<Texture2D> normals = GetAtlasSprites(grass.TexNormal as Texture2D, tiles);
-                        List<Texture2D> speculars = GetAtlasSprites(grass.TexSpecular as Texture2D, tiles);
+                        // Read all sprites from the Atlas back, so we can add more sprites (once when game is loaded)
+                        if (GrassDiffuses == null) GrassDiffuses = GetAtlasSprites(grass.TexDiffuse as Texture2D, tiles);
+                        if (GrassNormals == null) GrassNormals = GetAtlasSprites(grass.TexNormal as Texture2D, tiles);
+                        if (GrassAOST == null) GrassAOST = GetAtlasSprites(grass.TexSpecular as Texture2D, tiles);
+
+                        // Make a copy for every save game we load to extend conditionally
+                        List<Texture2D> diffuses = new List<Texture2D>(GrassDiffuses);
+                        List<Texture2D> normals = new List<Texture2D>(GrassNormals);
+                        List<Texture2D> aosts = new List<Texture2D>(GrassAOST);
 
                         // Dump out all sliced textures to check validity
                         // for (int i = 0; i < diffuses.Count; i += 1)
@@ -532,7 +542,7 @@ public class OcbCustomTextures : IModApi
                             // For now just must pass all three maps (no runtime creation)
                             diffuses.Add(PadTexture(custom.Diffuse.LoadTexture2D(), 34));
                             normals.Add(PadTexture(custom.Normal.LoadTexture2D(), 34));
-                            speculars.Add(PadTexture(custom.Specular.LoadTexture2D(), 34));
+                            aosts.Add(PadTexture(custom.Specular.LoadTexture2D(), 34));
 
                             UVRectTiling tile = new UVRectTiling();
                             tile.uv = new Rect(); // Create objects on struct
@@ -562,7 +572,7 @@ public class OcbCustomTextures : IModApi
                         // If that proves to be shaky, we're fucked, as there is only one UV map for all.
                         var diff_rects = diff_atlas.PackTextures(diffuses.ToArray(), 0, 8192, false);
                         var norm_rects = norm_atlas.PackTextures(normals.ToArray(), 0, 8192, false);
-                        var spec_rects = spec_atlas.PackTextures(speculars.ToArray(), 0, 8192, false);
+                        var spec_rects = spec_atlas.PackTextures(aosts.ToArray(), 0, 8192, false);
                         // ToDo: we assume we get the same results back from all three calls
 
                         // DumpTexure2D(diff_atlas, "Mods/OcbCustomTextures/patched-grass-diff-atlas.png");

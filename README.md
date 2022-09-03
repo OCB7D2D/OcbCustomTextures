@@ -152,6 +152,12 @@ Reminds me of some work I've done years ago to create web-sprites.
 
 ## Changelog
 
+### Version 0.3.0
+
+- Add experimental grass atlas patching
+- "live" helper functions via CMD options
+- Fix UV ID assignment
+
 ### Version 0.2.1
 
 - Fix for dedicated servers
