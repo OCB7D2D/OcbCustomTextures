@@ -142,6 +142,56 @@ that are normally set via the `uv.xml` fragment.
 </block>
 ```
 
+### Custom MicroSplat Terrain Blending
+
+Even though I haven't been able to crack to add really new textures to the current
+MicroSplat terrain rendering shader, I still got something working that at least
+allows to create additional slightly distinct variations from the existing terrain
+textures. MicroSplat can blend between multiple terrain textures, not just two.
+
+```xml
+<block name="terrOreCustom">
+	<!-- Important to give it this class to parse new properts -->
+	<!-- we could do it more agnostic, but this performs better -->
+	<property name="Class" value="CustomTerrain, CustomTextures"/>
+	<!-- this is the fallback texture, e.g. some preview will be -->
+	<!-- rendered with this single texture. Also if you have the -->
+	<!-- legacy distant terrain mod enabled, this texture will be -->
+	<!-- used. This feature is meant to be used with SplatMap. -->
+	<!-- Although you may hockup a new texture to support both -->
+	<property name="Texture" value="demo_terrain"/>
+	<!-- Determines how the preview looks when placing? -->
+	<!-- Not sure yet how this relates to texture indexes? -->
+	<property name="TerrainIndex" value="9"/>
+	<!-- Main setting needed to enable custom terrain blends -->
+	<!-- It seems this is the main knob the tell micro splat -->
+	<!-- to also sample additional texture for the final result -->
+	<property name="TerrainBlend" value="1.0"/>
+	<!-- Below are the blend settings -->
+	<!-- Most times you want 2 or 3 blends -->
+	<!-- Some compinations work ok, some work badly -->
+	<!-- You'll need to figure out a combo that fits -->
+	<property name="BlendDirt" value="0.0"/>
+	<property name="BlendGravel" value="0.2"/>
+	<property name="BlendOreCoal" value="1.0"/>
+	<property name="BlendAsphalt" value="0.0"/>
+	<property name="BlendOreIron" value="0.0"/>
+	<property name="BlendOreNitrate" value="0.8"/>
+	<property name="BlendOreOil" value="0.0"/>
+	<property name="BlendOreLead" value="0.4"/>
+	<property name="BlendStoneDesert" value="0.0"/>
+	<property name="BlendStoneRegular" value="0.0"/>
+	<property name="BlendStoneDestroyed" value="0.0"/>
+	<!-- Further Additional terrain block settings ... -->
+</block>
+```
+
+Mileage may vary what you can achieve with certain combinations and I'm not
+even really sure myself how it all works. I only know that this exposes all the
+low-level settings that go directly into the SplatMap shader. It might be good
+enough for most people to create additional ores or terrains. But you'll need
+to go through the trail and error process yourself :)
+
 ## Custom Grass Textures (not supported yet)
 
 Grass textures use a "true texture atlas", which is IMO normally just
@@ -155,6 +205,10 @@ seems feasible, but probably a lot of tedious work to get it right.
 Reminds me of some work I've done years ago to create web-sprites.
 
 ## Changelog
+
+### Version 0.4.0
+
+- Implement custom MicroSplat terrain blends
 
 ### Version 0.3.1
 

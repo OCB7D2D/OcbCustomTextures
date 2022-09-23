@@ -111,6 +111,7 @@ public class OcbCustomTextures : IModApi
     {
         if (!Registered) return;
         GameOptionsManager.TextureQualityChanged -= TextureQualityChanged;
+        BlockCustomTerrain.GameShutdown();
         Registered = false;
     }
 
