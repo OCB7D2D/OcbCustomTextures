@@ -52,6 +52,10 @@ mostly just passed through and I couldn't always figure out what
 they are intended to influence, but they match 1-to-1 the options
 that are normally set via the `uv.xml` fragment.
 
+To overwrite any existing texture in the atlas, you just need to
+define the id as the number of the texture ID you want overwritten:
+E.g. `<paint id="141" ... >` to overwrite `Garage Door 2` texture.
+
 `Config/blocks.xml`:
 
 ```xml
@@ -151,6 +155,10 @@ seems feasible, but probably a lot of tedious work to get it right.
 Reminds me of some work I've done years ago to create web-sprites.
 
 ## Changelog
+
+### Version 0.3.1
+
+- Allow to overwrite existing paint textures
 
 ### Version 0.3.0
 

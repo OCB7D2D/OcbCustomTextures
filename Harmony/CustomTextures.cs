@@ -420,7 +420,9 @@ public class OcbCustomTextures : IModApi
                                 texture.tiling.index = builtinOpaques + OpaquesAdded;
                                 int TextureID = PatchAtlasBlocks(opaque, texture);
                                 blockTextureData.TextureID = (ushort)(TextureID);
-                                blockTextureData.ID = GetFreePaintID();
+                                if (int.TryParse(xmlElement.GetAttribute("id"), out int idx))
+                                    blockTextureData.ID = idx; // overwrite existing texture
+                                else blockTextureData.ID = GetFreePaintID();
                                 OpaquesAdded += texture.Length;
                                 CustomOpaques.Add(texture);
                             }
