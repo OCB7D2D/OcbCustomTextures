@@ -206,6 +206,10 @@ Reminds me of some work I've done years ago to create web-sprites.
 
 ## Changelog
 
+### Version 0.4.1
+
+- Remove verbose debug log spam
+
 ### Version 0.4.0
 
 - Implement custom MicroSplat terrain blends

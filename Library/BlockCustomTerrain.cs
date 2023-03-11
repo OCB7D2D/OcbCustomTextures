@@ -68,7 +68,6 @@ public class BlockCustomTerrain : Block
         {
             // This might be our fantasy ID, intercept and correct
             var texID = VoxelMeshTerrain.DecodeMainTexId(_fullTexId);
-            Log.Out("GetColor for {0}", texID);
             // Check if this texture ID is known to use as a virtual ID
             // If found we have custom terrain blend settings to apply
             if (CustomBlends.TryGetValue(texID, out CustomTerrainBlend blend))
