@@ -497,6 +497,12 @@ public class OcbCustomTextures : IModApi
                         //terrain.ReloadTextureArrays(false);
                     }
 
+                    if (GrassAdded > 0 && GameManager.IsDedicatedServer)
+                    {
+                        foreach (TextureConfig custom in CustomGrass)
+                            UvMap[custom.ID] = 0; // Just make it known
+                    }
+
                     // Experimental Grass Atlas Patching
                     if (GrassAdded > 0 && !GameManager.IsDedicatedServer)
                     {
