@@ -192,7 +192,26 @@ low-level settings that go directly into the SplatMap shader. It might be good
 enough for most people to create additional ores or terrains. But you'll need
 to go through the trail and error process yourself :)
 
-## Custom Grass Textures (not supported yet)
+### MicroSplat Texture Replacing
+
+As already stated, one can't really add more texture the the MicroSplat terrain
+shader. But one may still want to replace existing textures. And luckily one
+of the A20 terrain textures seems unused (index 20) and can be used to at least
+bring one additional MicroSplat terrain texture into the world. Note that you
+can also use this slot (BlendStoneDesert) for terrain blends with other textures.
+
+```xml
+<append xpath="/paints">
+	<microsplat index="20">
+		<property name="Diffuse" value="#@modfolder:Resources/Terrain.unity3d?assets/4k.diffuse.jpg"/>
+		<property name="Normal" value="#@modfolder:Resources/Terrain.unity3d?assets/4k.normal.jpg"/>
+	</microsplat>
+</append>
+```
+
+Note that the index must be valid (0-23), you can't extend the existing Texture2DArray!!
+
+## Custom Grass Textures
 
 Grass textures use a "true texture atlas", which is IMO normally just
 one big texture/image where each block just uses a small rectangle
@@ -204,7 +223,13 @@ some point we even would need to grow the original texture. This all
 seems feasible, but probably a lot of tedious work to get it right.
 Reminds me of some work I've done years ago to create web-sprites.
 
+See https://github.com/OCB7D2D/OcbCustomTexturesPlants
+
 ## Changelog
+
+### Version 0.5.0
+
+- Allow to overwrite existing MicroSplat textures
 
 ### Version 0.4.2
 

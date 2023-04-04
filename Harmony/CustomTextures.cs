@@ -8,7 +8,34 @@ using System.Collections.Generic;
 using UnityEngine.Experimental.Rendering;
 using static OCB.TextureUtils;
 using static OCB.TextureAtlasUtils;
-using System.IO;
+
+/*
+// MicroSplat Texture2DArray
+0 - Snow Biome Top-Soil (Top)
+1 - Snow Biome Top-Soil (Side)
+2 - Forrest Biome Top-Soil (Top)
+3 - Desert Biome Top-Soil (Side)
+4 - Main Road Top Soil (Asphalt)
+5 - Small Road Top Soil (Gravel)
+6 - ?? Seldomly seen in destroyed biome (shamway factory)
+7 - Desert Biome Top-Soil "Sand" (Top)
+8 - Burnt Biome Top-Soil Bricks (Top)
+9 - Water (Side/Bottom) Terrain
+10 - Burnt Biome Top-Soil Grass (Top) - partially shown for 9 too!?
+11 - Desert Biome Top-Soil "Grass" (Top)
+12 - Desert Biome Top-Soil "Sand" (Side)
+13 - Farmland and below stone blocks
+14 - Gravel
+15 - Coal
+16 - Asphalt
+17 - Iron
+18 - Potassium
+19 - Underground Stone (Others)
+20 - Unused? (Looks like Underground Stone Desert)
+21 - Oil Shale
+22 - Lead
+23 - Destroyed Stone
+*/
 
 public class OcbCustomTextures : IModApi
 {
@@ -30,7 +57,8 @@ public class OcbCustomTextures : IModApi
     static readonly List<TextureConfig> CustomOpaques = new List<TextureConfig>();
     static readonly List<TextureConfig> CustomTerrains = new List<TextureConfig>();
     static readonly List<TextureConfig> CustomDecals = new List<TextureConfig>();
-    public static readonly List<TextureConfig> CustomGrass = new List<TextureConfig>();
+    static readonly List<TextureConfig> CustomGrass = new List<TextureConfig>();
+    static readonly List<MicroSplatConfig> CustomMicroSplat = new List<MicroSplatConfig>();
 
     // Counter how many individual textures are added
     static int OpaquesAdded = 0;
@@ -81,6 +109,8 @@ public class OcbCustomTextures : IModApi
         // Patch the textures into new array
         foreach (var texture in CustomOpaques)
             PatchAtlasBlocks(opaque, texture);
+        foreach (var texture in CustomMicroSplat)
+          PatchMicroSplatTexture(terrain, texture);   
         // Terrain seems to scale automatically?
         // Note: we don't alter MicroSplat-Maps yet
         // foreach (var texture in CustomTerrains)
@@ -182,6 +212,67 @@ public class OcbCustomTextures : IModApi
 
         return textureID;
 
+    }
+
+    private static void PatchMicroSplatTexture(Texture2DArray arr,
+        Texture2D texture, int index)
+    {
+        // Can't go lower than 512x512
+        var off = Quality > 2 ? 2 : Quality;
+        // Patch on the CPU if readable
+        if (arr.isReadable)
+        {
+            // Do the pixel patching on the CPU
+            for (int m = 0; m < arr.mipmapCount; m++)
+                arr.SetPixelData(texture.GetPixelData<byte>(m + off), m, index);
+            arr.Apply(updateMipmaps: false);
+        }
+        // Otherwise do it on the GPU directly
+        else
+        {
+            for (int m = 0; m < arr.mipmapCount; m++)
+                Graphics.CopyTexture(texture, 0, m + off, arr, index, m);
+        }
+        // Adjust name for info
+        arr.name += "_patched";
+    }
+
+    static Texture2D FullBlankBlackTexture = null;
+    static Texture2D FullBlankNormalTexture = null;
+
+    public static Texture2D GetFullBlackTexture()
+    {
+        if (FullBlankBlackTexture != null) return FullBlankBlackTexture;
+        return FullBlankBlackTexture = CreateBlackTexture(2048, 2048);
+    }
+
+    public static Texture2D GetFullNormalTexture()
+    {
+        if (FullBlankNormalTexture != null) return FullBlankNormalTexture;
+        return FullBlankNormalTexture = CreateNormalTexture(2048, 2048);
+    }
+
+    public static void PatchMicroSplatTexture(MeshDescription mesh, MicroSplatConfig cfg)
+    {
+        if (!mesh.IsSplatmap(MeshDescription.MESH_TERRAIN)) return;
+        if (mesh == null) throw new Exception("MESH MISSING");
+        var atlas = mesh.textureAtlas as TextureAtlasTerrain;
+        Quality = GameOptionsManager.GetTextureQuality();
+        if (!(atlas.diffuseTexture is Texture2DArray albedos))
+            throw new Exception("Expected Texture2DArray for diffuse");
+        if (!(atlas.normalTexture is Texture2DArray normals))
+            throw new Exception("Expected Texture2DArray for normal");
+        if (!(atlas.specularTexture is Texture2DArray speculars))
+            throw new Exception("Expected Texture2DArray for specular");
+        PatchMicroSplatTexture(albedos, LoadTexture(cfg.Diffuse.Path), cfg.Index);
+        if (cfg.Normal != null) PatchMicroSplatTexture(normals,
+            LoadTexture(cfg.Normal.Path), cfg.Index);
+        else PatchMicroSplatTexture(speculars,
+            GetFullNormalTexture(), cfg.Index);
+        if (cfg.Specular != null) PatchMicroSplatTexture(speculars,
+            LoadTexture(cfg.Specular.Path), cfg.Index);
+        else PatchMicroSplatTexture(speculars,
+            GetFullBlackTexture(), cfg.Index);
     }
 
     static int PatchAtlasTerrain(MeshDescription mesh, TextureConfig tex)
@@ -445,7 +536,7 @@ public class OcbCustomTextures : IModApi
                                 blockTextureData.SortIndex = Convert.ToByte(props.Values["SortIndex"]);
                             blockTextureData.Init();
                         }
-                        // terrain elements are only known by us
+                        // terrain xml elements are only known by us
                         else if (xmlElement.Name.Equals("terrain"))
                         {
                             DynamicProperties props = GetDynamicProperties(xmlElement);
@@ -455,7 +546,15 @@ public class OcbCustomTextures : IModApi
                             TerrainsAdded += texture.Length;
                             CustomTerrains.Add(texture);
                         }
-                        // decal elements are only known by us
+                        // microsplat xml elements are only known by us
+                        else if (xmlElement.Name.Equals("microsplat"))
+                        {
+                            DynamicProperties props = GetDynamicProperties(xmlElement);
+                            var texture = new MicroSplatConfig(xmlElement, props);
+                            PatchMicroSplatTexture(terrain, texture);
+                            CustomMicroSplat.Add(texture);
+                        }
+                        // decal xml elements are only known by us
                         else if (xmlElement.Name.Equals("decal"))
                         {
                             DynamicProperties props = GetDynamicProperties(xmlElement);
@@ -463,7 +562,7 @@ public class OcbCustomTextures : IModApi
                             DecalsAdded += texture.Length;
                             CustomDecals.Add(texture);
                         }
-                        // grass elements are only known by us
+                        // grass xml elements are only known by us
                         else if (xmlElement.Name.Equals("grass"))
                         {
                             DynamicProperties props = GetDynamicProperties(xmlElement);

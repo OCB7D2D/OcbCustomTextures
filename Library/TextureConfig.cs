@@ -2,7 +2,47 @@
 using System.Xml;
 using UnityEngine;
 
-// A structure holding all the info for custom textures
+
+// A structure holding all the info for custom terrain textures
+public struct MicroSplatConfig
+{
+    public int Index;
+    public DynamicProperties Props;
+    public TextureAssetUrl Diffuse;
+    public TextureAssetUrl Normal;
+    public TextureAssetUrl Specular;
+
+    public MicroSplatConfig(XmlElement xml, DynamicProperties props)
+    {
+
+        Props = props;
+
+        if (!xml.HasAttribute("index")) throw new Exception("Mandatory attribute `index` missing");
+        if (!props.Contains("Diffuse")) throw new Exception("Mandatory property `Diffuse` missing");
+        // if (!props.Contains("Normal")) throw new Exception("Mandatory property `Normal` missing");
+        // if (!props.Contains("Material")) throw new Exception("Mandatory property `Material` missing");
+
+        Index = int.Parse(xml.GetAttribute("index"));
+
+        string Diffuse = props.Contains("Diffuse") ?
+            props.GetString("Diffuse") : null;
+        this.Diffuse = new TextureAssetUrl(Diffuse);
+
+        string Normal = props.Contains("Normal") ?
+            props.GetString("Normal") : null;
+        if (Normal == null) this.Normal = null;
+        else this.Normal = new TextureAssetUrl(Normal);
+
+        string Specular = props.Contains("Specular") ?
+            props.GetString("Specular") : null;
+        if (Specular == null) this.Specular = null;
+        else this.Specular = new TextureAssetUrl(Specular);
+
+    }
+
+}
+
+// A structure holding all the info for custom block textures
 public struct TextureConfig
 {
     public string ID;
@@ -68,3 +108,4 @@ public struct TextureConfig
     }
 
 }
+

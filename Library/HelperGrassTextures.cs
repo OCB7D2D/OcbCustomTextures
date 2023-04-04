@@ -71,9 +71,13 @@ public class HelperGrassTextures
             // DumpTexure2D(t2d, "Mods/OcbCustomTextures/org-grass-diff-atlas.png");
             // Texture2D diff_atlas = new Texture2D(8192, 8192, t2d.format, false);
             // var diff_rects = diff_atlas.PackTextures(diffuses.ToArray(), 0, 8192, false);
-            Graphics.CopyTexture(new_albedo, 0, 0, 0, 0,
-                new_albedo.width, new_albedo.height,
-                diff_atlas, 0, 0, x, y);
+            for(int i = 0; i < new_albedo.mipmapCount; i++)
+            {
+                int factor = (int)Mathf.Pow(2, i);
+                Graphics.CopyTexture(new_albedo, 0, i, 0, 0,
+                    new_albedo.width / factor, new_albedo.height / factor,
+                    diff_atlas, 0, i, x / factor, y / factor);
+            }
             grass.TexDiffuse = diff_atlas;
             grass.textureAtlas.diffuseTexture = diff_atlas;
         }
@@ -120,9 +124,13 @@ public class HelperGrassTextures
                 }
             }
 
-            Graphics.CopyTexture(new_normal, 0, 0, 0, 0,
-                new_normal.width, new_normal.height,
-                norm_atlas, 0, 0, x, y);
+            for (int i = 0; i < new_normal.mipmapCount; i++)
+            {
+                int factor = (int)Mathf.Pow(2, i);
+                Graphics.CopyTexture(new_normal, 0, i, 0, 0,
+                    new_normal.width / factor, new_normal.height / factor,
+                    norm_atlas, 0, i, x / factor, y / factor);
+            }
             grass.TexNormal = norm_atlas;
             grass.textureAtlas.normalTexture = norm_atlas;
         }
@@ -162,9 +170,13 @@ public class HelperGrassTextures
                 }
             }
 
-            Graphics.CopyTexture(new_spec, 0, 0, 0, 0,
-                new_spec.width, new_spec.height,
-                spec_atlas, 0, 0, x, y);
+            for (int i = 0; i < new_spec.mipmapCount; i++)
+            {
+                int factor = (int)Mathf.Pow(2, i);
+                Graphics.CopyTexture(new_spec, 0, i, 0, 0,
+                    new_spec.width / factor, new_spec.height / factor,
+                    spec_atlas, 0, i, x / factor, y / factor);
+            }
             grass.TexSpecular = spec_atlas;
             grass.textureAtlas.specularTexture = spec_atlas;
         }
