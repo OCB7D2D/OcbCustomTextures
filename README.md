@@ -142,7 +142,7 @@ that are normally set via the `uv.xml` fragment.
 </block>
 ```
 
-### Custom MicroSplat Terrain Blending
+### MicroSplat Terrain Blending
 
 Even though I haven't been able to crack to add really new textures to the current
 MicroSplat terrain rendering shader, I still got something working that at least
@@ -169,20 +169,24 @@ textures. MicroSplat can blend between multiple terrain textures, not just two.
 	<property name="TerrainBlend" value="1.0"/>
 	<!-- Below are the blend settings -->
 	<!-- Most times you want 2 or 3 blends -->
-	<!-- Some compinations work ok, some work badly -->
+	<!-- Some combinations work ok, some work badly -->
 	<!-- You'll need to figure out a combo that fits -->
-	<property name="BlendDirt" value="0.0"/>
-	<property name="BlendGravel" value="0.2"/>
-	<property name="BlendOreCoal" value="1.0"/>
-	<property name="BlendAsphalt" value="0.0"/>
-	<property name="BlendOreIron" value="0.0"/>
-	<property name="BlendOreNitrate" value="0.8"/>
-	<property name="BlendOreOil" value="0.0"/>
-	<property name="BlendOreLead" value="0.4"/>
-	<property name="BlendStoneDesert" value="0.0"/>
-	<property name="BlendStoneRegular" value="0.0"/>
-	<property name="BlendStoneDestroyed" value="0.0"/>
+	<!-- Number in the comment is the MicroSplat array index -->
+	<property name="BlendDirt" value="0.0"/> <!-- 13 -->
+	<property name="BlendGravel" value="0.2"/> <!-- 14 -->
+	<property name="BlendOreCoal" value="1.0"/> <!-- 15 -->
+	<property name="BlendAsphalt" value="0.0"/> <!-- 16 -->
+	<property name="BlendOreIron" value="0.0"/> <!-- 17 -->
+	<property name="BlendOreNitrate" value="0.8"/> <!-- 18 -->
+	<property name="BlendOreOil" value="0.0"/> <!-- 21 -->
+	<property name="BlendOreLead" value="0.4"/> <!-- 22 -->
+	<property name="BlendStoneDesert" value="0.0"/> <!-- 20 -->
+	<property name="BlendStoneRegular" value="0.0"/> <!-- 19 -->
+	<property name="BlendStoneDestroyed" value="0.0"/> <!-- 23 -->
 	<!-- Further Additional terrain block settings ... -->
+	<property name="Material" value="Mdirt"/>
+	<property name="Shape" value="Terrain"/>
+	<property name="Mesh" value="terrain"/>
 </block>
 ```
 
