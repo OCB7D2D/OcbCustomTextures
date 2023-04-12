@@ -8,6 +8,10 @@ using System.Collections.Generic;
 using UnityEngine.Experimental.Rendering;
 using static OCB.TextureUtils;
 using static OCB.TextureAtlasUtils;
+using static StringParsers;
+using XMLData;
+using System.Security.Policy;
+using UnityEngine.Assertions;
 
 /*
 // MicroSplat Texture2DArray
@@ -60,11 +64,33 @@ public class OcbCustomTextures : IModApi
     static readonly List<TextureConfig> CustomGrass = new List<TextureConfig>();
     static readonly List<MicroSplatConfig> CustomMicroSplat = new List<MicroSplatConfig>();
 
+    
+    static readonly Dictionary<int, CustomBiomeLayer> CustomBiomeLayers = new Dictionary<int, CustomBiomeLayer>();
+    public static readonly Dictionary<int, CustomBiomeColor> CustomBiomeColors = new Dictionary<int, CustomBiomeColor>();
+
+
     // Counter how many individual textures are added
     static int OpaquesAdded = 0;
     static int TerrainsAdded = 0;
     static int DecalsAdded = 0;
     static int GrassAdded = 0;
+
+    public struct CustomBiomeColor
+    {
+        public int index;
+        public Color32 color1;
+        public Color32 color2;
+    }
+
+    public struct CustomBiomeLayer
+    {
+        public int index;
+        public DynamicProperties props;
+        public List<Keyframe> heights;
+        public List<Keyframe> slopes;
+        public List<Keyframe> cavities;
+        public List<Keyframe> erosions;
+    }
 
     public void InitMod(Mod mod)
     {
@@ -106,11 +132,13 @@ public class OcbCustomTextures : IModApi
                     spec2DArr, spec2DArr.depth + OpaquesAdded, true, linear, true);
             }
         }
+
         // Patch the textures into new array
         foreach (var texture in CustomOpaques)
             PatchAtlasBlocks(opaque, texture);
-        foreach (var texture in CustomMicroSplat)
-          PatchMicroSplatTexture(terrain, texture);   
+
+        ApplyCustomMicroSplats(terrain);
+
         // Terrain seems to scale automatically?
         // Note: we don't alter MicroSplat-Maps yet
         // foreach (var texture in CustomTerrains)
@@ -127,6 +155,17 @@ public class OcbCustomTextures : IModApi
         }
         if (GameManager.Instance != null && GameManager.Instance.prefabLODManager != null)
             GameManager.Instance.prefabLODManager.UpdateMaterials();
+    }
+
+    private static void ApplyCustomMicroSplats(MeshDescription terrain)
+    {
+        int maxMicroSplatIndex = 0;
+        foreach (var texture in CustomMicroSplat) maxMicroSplatIndex
+            = Math.Max(maxMicroSplatIndex, texture.Index + 1);
+        ExtendMicroSplatTexture(terrain, maxMicroSplatIndex);
+        foreach (var texture in CustomMicroSplat)
+            PatchMicroSplatTexture(terrain, texture);
+        terrain.ReloadTextureArrays(false);
     }
 
     public void GameStartDone()
@@ -215,12 +254,35 @@ public class OcbCustomTextures : IModApi
     }
 
     private static void PatchMicroSplatTexture(Texture2DArray arr,
+        DataLoader.DataPathIdentifier path, int index)
+    {
+        if (path.AssetName.EndsWith("]"))
+        {
+            var start = path.AssetName.LastIndexOf("[");
+            if (start != -1)
+            {
+                var nr = int.Parse(path.AssetName.Substring(
+                    start + 1, path.AssetName.Length - start - 2));
+                var tex = AssetBundleManager.Instance.Get<Texture2DArray>(
+                    path.BundlePath, path.AssetName.Substring(0, start));
+                var off = Quality > 2 ? 2 : Quality;
+                // Graphics.CopyTexture(texture, 0, arr, index);
+                for (int m = 0; m < arr.mipmapCount; m++)
+                    Graphics.CopyTexture(tex, nr, m + off, arr, index, m);
+                return;
+            }
+        }
+        PatchMicroSplatTexture(arr, LoadTexture(path), index);
+    }
+
+    private static void PatchMicroSplatTexture(Texture2DArray arr,
         Texture2D texture, int index)
     {
         // Can't go lower than 512x512
         var off = Quality > 2 ? 2 : Quality;
+        // Log.Out("Patch MicroSplat at index {0} ({1}) {2}", index, arr.name, arr.isReadable);
         // Patch on the CPU if readable
-        if (arr.isReadable)
+        if (arr.isReadable && off > 0)
         {
             // Do the pixel patching on the CPU
             for (int m = 0; m < arr.mipmapCount; m++)
@@ -230,11 +292,13 @@ public class OcbCustomTextures : IModApi
         // Otherwise do it on the GPU directly
         else
         {
+            // Graphics.CopyTexture(texture, 0, arr, index);
             for (int m = 0; m < arr.mipmapCount; m++)
                 Graphics.CopyTexture(texture, 0, m + off, arr, index, m);
+            // if (arr.isReadable) arr.Apply(false, false);
         }
-        // Adjust name for info
-        arr.name += "_patched";
+        if (!arr.name.Contains("_patched"))
+            arr.name += "_patched";
     }
 
     static Texture2D FullBlankBlackTexture = null;
@@ -252,6 +316,92 @@ public class OcbCustomTextures : IModApi
         return FullBlankNormalTexture = CreateNormalTexture(2048, 2048);
     }
 
+    // Layer 0 => (1.0, 0.0, 0.0, 0.0) and (0.0, 0.0, 0.0, 0.0) => texture 1
+    // Layer 1 => (1.0, 0.0, 0.0, 0.0) and (0.0, 0.0, 0.0, 0.0) => texture 0
+    // Layer 2 => (0.0, 1.0, 0.0, 0.0) and (0.0, 0.0, 0.0, 0.0) => texture 1
+    // Layer 3 => (0.0, 1.0, 0.0, 0.0) and (0.0, 0.0, 0.0, 0.0) => texture 2
+    // Layer 4 => (0.0, 0.0, 1.0, 0.0) and (0.0, 0.0, 0.0, 0.0) => texture 10
+    // Layer 5 => (0.0, 0.0, 1.0, 0.0) and (0.0, 0.0, 0.0, 0.0) => texture 1
+    // Layer 6 => (0.0, 0.0, 0.0, 1.0) and (0.0, 0.0, 0.0, 0.0) => texture 10
+    // Layer 7 => (0.0, 0.0, 0.0, 1.0) and (0.0, 0.0, 0.0, 0.0) => texture 8
+    // Layer 8 => (0.0, 0.0, 0.0, 0.0) and (1.0, 0.0, 0.0, 0.0) => texture 7
+    // Layer 9 => (0.0, 0.0, 0.0, 0.0) and (1.0, 0.0, 0.0, 0.0) => texture 3
+    // Layer 10 => (0.0, 0.0, 0.0, 0.0) and (1.0, 0.0, 0.0, 0.0) => texture 12
+    // Layer 11 => (0.0, 0.0, 0.0, 0.0) and (1.0, 0.0, 0.0, 0.0) => texture 11
+
+    public static bool LockCustomBiomeLayers = false;
+
+    [HarmonyPatch(typeof(MicroSplatProceduralTextureConfig), "GetCurveTexture")]
+    class MicroSplatProceduralTextureConfigGetCurveTexture
+    {
+        static void Prefix(MicroSplatProceduralTextureConfig __instance)
+        {
+            if (LockCustomBiomeLayers) return;
+            foreach (var kv in CustomBiomeLayers)
+            {
+                var index = kv.Key;
+                var props = kv.Value.props;
+                while (index >= __instance.layers.Count)
+                {
+                    Log.Out("Adding new Layer {0}", __instance.layers.Count);
+                    __instance.layers.Add(new MicroSplatProceduralTextureConfig.Layer());
+                }
+                var layer = __instance.layers[index];
+                props.ParseFloat("weight", ref layer.weight);
+                props.ParseBool("noise-active", ref layer.noiseActive);
+                props.ParseFloat("noise-frequency", ref layer.noiseFrequency);
+                props.ParseFloat("noise-offset", ref layer.noiseOffset);
+                props.ParseVec("noise-range", ref layer.noiseRange);
+                props.ParseBool("height-active", ref layer.heightActive);
+                props.ParseBool("slope-active", ref layer.slopeActive);
+                props.ParseBool("erosion-active", ref layer.erosionMapActive);
+                props.ParseBool("cavity-active", ref layer.cavityMapActive);
+                props.ParseEnum("height-curve-mode", ref layer.heightCurveMode);
+                props.ParseEnum("slope-curve-mode", ref layer.slopeCurveMode);
+                props.ParseEnum("erosion-curve-mode", ref layer.erosionCurveMode);
+                props.ParseEnum("cavity-curve-mode", ref layer.cavityCurveMode);
+                props.ParseInt("microsplat-index", ref layer.textureIndex);
+                if (props.Contains("biome-weight-1")) layer.biomeWeights =
+                    ParseVector4(props.GetString("biome-weight-1"));
+                if (props.Contains("biome-weight-2")) layer.biomeWeights2 =
+                    ParseVector4(props.GetString("biome-weight-2"));
+                if (kv.Value.heights != null) layer.heightCurve.keys = kv.Value.heights.ToArray();
+                if (kv.Value.slopes != null) layer.slopeCurve.keys = kv.Value.slopes.ToArray();
+                if (kv.Value.erosions != null) layer.erosionMapCurve.keys = kv.Value.erosions.ToArray();
+                if (kv.Value.cavities != null) layer.cavityMapCurve.keys = kv.Value.cavities.ToArray();
+                Log.Out("Set {0}: tex {1}, weights: {2}/{3}/{4}",
+                    index, layer.textureIndex, layer.weight,
+                    layer.biomeWeights, layer.biomeWeights2);
+            }
+
+        }
+    }
+
+    public static void ExtendMicroSplatTexture(MeshDescription mesh, int size)
+    {
+        if (!mesh.IsSplatmap(MeshDescription.MESH_TERRAIN)) return;
+        if (mesh == null) throw new Exception("MESH MISSING");
+        var atlas = mesh.textureAtlas as TextureAtlasTerrain;
+        Quality = GameOptionsManager.GetTextureQuality();
+        if (!(atlas.diffuseTexture is Texture2DArray albedos))
+            throw new Exception("Expected Texture2DArray for diffuse");
+        if (!(atlas.normalTexture is Texture2DArray normals))
+            throw new Exception("Expected Texture2DArray for normal");
+        if (!(atlas.specularTexture is Texture2DArray speculars))
+            throw new Exception("Expected Texture2DArray for specular");
+        mesh.TexDiffuse = atlas.diffuseTexture = ExtendMicroSplatTexture(albedos, size);
+        mesh.TexNormal = atlas.normalTexture = ExtendMicroSplatTexture(normals, size);
+        mesh.TexSpecular = atlas.specularTexture = ExtendMicroSplatTexture(speculars, size);
+        mesh.ReloadTextureArrays(true);
+
+    }
+
+    private static Texture2DArray ExtendMicroSplatTexture(Texture2DArray tarr, int size)
+    {
+        if (tarr.depth >= size) return tarr;
+        return ResizeTextureArray2(tarr, size, false, false);
+    }
+
     public static void PatchMicroSplatTexture(MeshDescription mesh, MicroSplatConfig cfg)
     {
         if (!mesh.IsSplatmap(MeshDescription.MESH_TERRAIN)) return;
@@ -264,13 +414,13 @@ public class OcbCustomTextures : IModApi
             throw new Exception("Expected Texture2DArray for normal");
         if (!(atlas.specularTexture is Texture2DArray speculars))
             throw new Exception("Expected Texture2DArray for specular");
-        PatchMicroSplatTexture(albedos, LoadTexture(cfg.Diffuse.Path), cfg.Index);
-        if (cfg.Normal != null) PatchMicroSplatTexture(normals,
-            LoadTexture(cfg.Normal.Path), cfg.Index);
+        PatchMicroSplatTexture(albedos, cfg.Diffuse.Path, cfg.Index);
+        if (cfg.Normal != null) PatchMicroSplatTexture(
+            normals, cfg.Normal.Path, cfg.Index);
         else PatchMicroSplatTexture(speculars,
             GetFullNormalTexture(), cfg.Index);
-        if (cfg.Specular != null) PatchMicroSplatTexture(speculars,
-            LoadTexture(cfg.Specular.Path), cfg.Index);
+        if (cfg.Specular != null) PatchMicroSplatTexture(
+            speculars, cfg.Specular.Path, cfg.Index);
         else PatchMicroSplatTexture(speculars,
             GetFullBlackTexture(), cfg.Index);
     }
@@ -370,7 +520,7 @@ public class OcbCustomTextures : IModApi
 
     static int GetFreePaintID()
     {
-        
+
         for (var i = 0; i < BlockTextureData.list.Length; i++)
         {
             if (BlockTextureData.list[i] == null) return i;
@@ -400,6 +550,7 @@ public class OcbCustomTextures : IModApi
     [HarmonyPatch("CreateBlockTextures")]
     public class Patches
     {
+
         class PatchedEnumerator : IEnumerable
         {
 
@@ -419,13 +570,28 @@ public class OcbCustomTextures : IModApi
                 if (documentElement.ChildNodes.Count == 0)
                     throw new Exception("No element <block_textures> found!");
 
+                // Clear structures before parsing
+                OpaquesAdded = 0;
+                TerrainsAdded = 0;
+                GrassAdded = 0;
+                DecalsAdded = 0;
+                CustomOpaques.Clear();
+                CustomTerrains.Clear();
+                CustomGrass.Clear();
+                CustomMicroSplat.Clear();
+                CustomBiomeColors.Clear();
+                CustomBiomeLayers.Clear();
+                GrassDiffuses = null;
+                GrassNormals = null;
+                GrassAOST = null;
+
                 var opaque = MeshDescription.meshes[MeshDescription.MESH_OPAQUE];
                 var terrain = MeshDescription.meshes[MeshDescription.MESH_TERRAIN];
                 var opaqueAtlas = opaque.textureAtlas as TextureAtlasBlocks;
                 var terrainAtlas = terrain.textureAtlas as TextureAtlasTerrain;
 
                 int builtinTerrains = terrainAtlas.diffuse.Length;
-                int builtinOpaques = opaqueAtlas.diffuseTexture == null ? 
+                int builtinOpaques = opaqueAtlas.diffuseTexture == null ?
                     0 : (opaqueAtlas.diffuseTexture as Texture2DArray).depth;
 
                 /* PRE-PARSE STEP TO DETERMINE FINAL NUMBERS FIRST */
@@ -551,7 +717,7 @@ public class OcbCustomTextures : IModApi
                         {
                             DynamicProperties props = GetDynamicProperties(xmlElement);
                             var texture = new MicroSplatConfig(xmlElement, props);
-                            PatchMicroSplatTexture(terrain, texture);
+                            // PatchMicroSplatTexture(terrain, texture);
                             CustomMicroSplat.Add(texture);
                         }
                         // decal xml elements are only known by us
@@ -569,6 +735,28 @@ public class OcbCustomTextures : IModApi
                             var texture = new TextureConfig(xmlElement, props);
                             GrassAdded += texture.Length;
                             CustomGrass.Add(texture);
+                        }
+                        else if (xmlElement.Name.Equals("biome-layer"))
+                        {
+                            int index = int.Parse(xmlElement.GetAttribute("index"));
+                            CustomBiomeLayers.Add(index, new CustomBiomeLayer()
+                            {
+                                index = index, props = GetDynamicProperties(xmlElement),
+                                heights = ParseBiomeLayer(xmlElement, "height-keyframes"),
+                                slopes = ParseBiomeLayer(xmlElement, "slope-keyframes"),
+                                cavities = ParseBiomeLayer(xmlElement, "cavity-keyframes"),
+                                erosions = ParseBiomeLayer(xmlElement, "erosion-keyframes"),
+                            });
+                        }
+                        else if (xmlElement.Name.Equals("biome-color"))
+                        {
+                            int index = int.Parse(xmlElement.GetAttribute("biome"));
+                            CustomBiomeColors.Add(index, new CustomBiomeColor()
+                            {
+                                index = index,
+                                color1 = ParseColor32(xmlElement.GetAttribute("color1")),
+                                color2 = ParseColor32(xmlElement.GetAttribute("color2")),
+                            });
                         }
                     }
                     // EO read XML
@@ -726,9 +914,11 @@ public class OcbCustomTextures : IModApi
 
                     }
 
+                    // Apply all microsplats at once
+                    ApplyCustomMicroSplats(terrain);
+
                     // Decals patching removed for now since due to available space
                     // in raw block data => 4 bits, 16 different decals max.
-
                     yield break;
                 }
                 finally
@@ -736,6 +926,29 @@ public class OcbCustomTextures : IModApi
                     if (enumerator is IDisposable disposable2)
                         disposable2.Dispose();
                 }
+            }
+
+            private List<Keyframe> ParseBiomeLayer(XmlElement xml, string name)
+            {
+                List<Keyframe> frames = null;
+                foreach (XmlNode outer in xml)
+                {
+                    if (!(outer is XmlElement node)) continue;
+                    if (!node.Name.Equals(name)) continue;
+                    frames = new List<Keyframe>();
+                    foreach (XmlNode inner in node)
+                    {
+                        if (!(inner is XmlElement child)) continue;
+                        if (!child.Name.Equals("keyframe")) continue;
+                        Keyframe frame = new Keyframe();
+                        if (child.HasAttribute("time")) frame.time =
+                            ParseFloat(child.GetAttribute("time"));
+                        if (child.HasAttribute("value")) frame.value =
+                            ParseFloat(child.GetAttribute("value"));
+                        frames.Add(frame);
+                    }
+                }
+                return frames;
             }
 
             private Texture2D PadTexture(Texture2D tex, int padding)
@@ -821,6 +1034,52 @@ public class OcbCustomTextures : IModApi
             Resources.UnloadUnusedAssets();
             return false;
         }
+    }
+
+    /*
+    [HarmonyPatch(typeof(VoxelMeshTerrain))]
+    [HarmonyPatch("ConfigureTerrainMaterial")]
+    public class ConfigureTerrainMaterial
+    {
+        public static void Prefix(VoxelMeshTerrain __instance,
+            MicroSplatProceduralTextureConfig ___msProcData)
+        {
+            Log.Out("VixelMeshTerrain COnfigure {0}", ___msProcData.layers.Count);
+        }
+    }
+    */
+
+    /*
+        MicroSplatPropData prop = VoxelMeshTerrainPropData.Get(null);
+            for (int n = 0; n< 32; n++) prop.SetValue(24, n, prop.GetValue(3, n));
+            for (int n = 0; n< 32; n++) prop.SetValue(25, n, prop.GetValue(3, n));
+            for (int n = 0; n< 32; n++) prop.SetValue(26, n, prop.GetValue(3, n));
+            for (int n = 0; n< 32; n++) prop.SetValue(27, n, prop.GetValue(3, n));
+    */
+
+    /*
+        [HarmonyPatch(typeof(VoxelMeshTerrain))]
+        [HarmonyPatch("InitMicroSplat")]
+        public class VoxelMeshTerrainInitMicroSplat
+        {
+            public static void Postfix(MicroSplatProceduralTextureConfig ___msProcData,
+                ref Texture2D ___msProcCurveTex, ref Texture2D ___msProcParamTex)
+            {
+                // ___msProcData = Resources.Load<MicroSplatProceduralTextureConfig>("Shaders/MicroSplat/MicroSplatTerrainInGame_proceduraltexture");
+                ___msProcCurveTex = ___msProcData.GetCurveTexture();
+                ___msProcParamTex = ___msProcData.GetParamTexture();
+            }
+        }
+    */
+
+    public static Vector4 ParseVector4(string _input)
+    {
+        SeparatorPositions separatorPositions = GetSeparatorPositions(_input, ',', 3);
+        if (separatorPositions.TotalFound != 3) return Vector4.zero;
+        return new Vector4(ParseFloat(_input, 0, separatorPositions.Sep1 - 1),
+            ParseFloat(_input, separatorPositions.Sep1 + 1, separatorPositions.Sep2 - 1),
+            ParseFloat(_input, separatorPositions.Sep2 + 1, separatorPositions.Sep3 - 1),
+            ParseFloat(_input, separatorPositions.Sep3 + 1));
     }
 
 }

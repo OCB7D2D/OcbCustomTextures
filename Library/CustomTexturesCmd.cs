@@ -1,6 +1,8 @@
 using UnityEngine;
 using System.Collections.Generic;
 using static OCB.TextureUtils;
+using System.Runtime.ConstrainedExecution;
+using System;
 
 
 public class CustomTexturesCmd : ConsoleCmdAbstract
@@ -191,16 +193,111 @@ public class CustomTexturesCmd : ConsoleCmdAbstract
 
     public static Coroutine FooBarRunner = null;
 
+
+    readonly HarmonyFieldProxy<Texture2D> VoxelMeshTerrainPropTex =
+        new HarmonyFieldProxy<Texture2D>(typeof(VoxelMeshTerrain), "msPropTex");
+    readonly HarmonyFieldProxy<Texture2D> VoxelMeshTerrainProcCurveTex =
+        new HarmonyFieldProxy<Texture2D>(typeof(VoxelMeshTerrain), "msProcCurveTex");
+    readonly HarmonyFieldProxy<Texture2D> VoxelMeshTerrainProcParamTex =
+        new HarmonyFieldProxy<Texture2D>(typeof(VoxelMeshTerrain), "msProcParamTex");
+    readonly HarmonyFieldProxy<MicroSplatPropData> VoxelMeshTerrainPropData =
+        new HarmonyFieldProxy<MicroSplatPropData>(typeof(VoxelMeshTerrain), "msPropData");
+    readonly HarmonyFieldProxy<MicroSplatProceduralTextureConfig> VoxelMeshTerrainProcData = 
+        new HarmonyFieldProxy<MicroSplatProceduralTextureConfig>(typeof(VoxelMeshTerrain), "msProcData");
+
+
+    readonly HarmonyFieldProxy<Texture2D> MicroSplatPropDataTexture =
+        new HarmonyFieldProxy<Texture2D>(typeof(MicroSplatPropData), "tex");
+
+
+    private static Texture2D PatchBiomeMask(Texture2D tex, Color col)
+    {
+        var cpy = new Texture2D(tex.width, tex.height,
+            tex.format, mipChain: false);
+        cpy.filterMode = FilterMode.Bilinear;
+        for (int x = 0; x < tex.width; x++)
+            for (int y = 0; y < tex.height; y++)
+                cpy.SetPixel(x, y, col);
+        cpy.Apply(false, true);
+        return cpy;
+    }
+
     public override void Execute(List<string> _params, CommandSenderInfo _senderInfo)
     {
 
-        if (_params.Count == 2)
+        if (_params.Count == 1)
+        {
+            if (_params[0] == "patchms")
+            {
+                // procBiomeMask1.r => Distant texture 0 (my custom texture)
+                // procBiomeMask1.g => grass (texture 2)
+                // procBiomeMask1.b => texture index 10
+                // procBiomeMask1.a => texture index 8 (and 10?)
+                if (GameManager.Instance?.World?.ChunkCache?.ChunkProvider
+                    is ChunkProviderGenerateWorldFromRaw cpr)
+                {
+                    var color = new Color(0f, 0f, 0f, 0f);
+                    cpr.procBiomeMask1 = PatchBiomeMask(
+                        cpr.procBiomeMask1, color);
+                    var color2 = new Color(0f, 0f, 0f, 1f);
+                    cpr.procBiomeMask2 = PatchBiomeMask(
+                        cpr.procBiomeMask2, color2);
+                }
+            }
+            else if (_params[0] == "layers")
+            {
+                if (VoxelMeshTerrainProcData.Get(null) is MicroSplatProceduralTextureConfig cfg)
+                {
+                    for (int i = 0; i < cfg.layers.Count; i++)
+                    {
+                        var layer = cfg.layers[i];
+                        Log.Out("Layer {0} => {1}/{2} #{3}", i,
+                            layer.biomeWeights, layer.biomeWeights2,
+                            layer.textureIndex);
+                    }
+                }
+
+            }
+        }
+        else if (_params.Count == 2)
         {
             switch (_params[0])
             {
                 case "dump":
                     System.IO.Directory.CreateDirectory("export");
-                    DumpMeshAtlas(GetMesh(_params[1]), "export/" + _params[1]);
+                    if (_params[1] == "microsplat")
+                    {
+                        var path = "export/" + _params[1];
+                        System.IO.Directory.CreateDirectory(path);
+                        if (GameManager.Instance?.World?.ChunkCache?.ChunkProvider
+                            is ChunkProviderGenerateWorldFromRaw cpr)
+                        {
+                            DumpTexure(cpr.procBiomeMask1, string.Format(
+                                "{0}/world.biome.mask.1.png", path));
+                            DumpTexure(cpr.procBiomeMask2, string.Format(
+                                "{0}/world.biome.mask.2.png", path));
+                            for (int i = 0; i < cpr.splats.Length; i++)
+                                DumpTexure(cpr.splats[i], string.Format(
+                                    "{0}/world.splat.{1}.png", path, i));
+                        }
+                        
+                        if (VoxelMeshTerrainPropTex.Get(null) is Texture2D msPropTex)
+                            DumpTexure(msPropTex, string.Format("{0}/mesh.prop.png", path));
+                        if (VoxelMeshTerrainProcCurveTex.Get(null) is Texture2D msProcCurveTex)
+                            DumpTexure(msProcCurveTex, string.Format("{0}/mesh.proc.curve.png", path));
+                        if (VoxelMeshTerrainProcParamTex.Get(null) is Texture2D msProcParamTex)
+                            DumpTexure(msProcParamTex, string.Format("{0}/mesh.proc.param.png", path));
+                        
+                        if (VoxelMeshTerrainProcData.Get(null) is MicroSplatProceduralTextureConfig cfg)
+                        {
+                            Log.Out("Terrain Layer Count: {0}", cfg.layers.Count);
+                        }
+
+                    }
+                    else
+                    {
+                        DumpMeshAtlas(GetMesh(_params[1]), "export/" + _params[1]);
+                    }
                     break;
                 case "uvs":
                     var uvs = GetMesh(_params[1]).textureAtlas.uvMapping;
@@ -210,12 +307,84 @@ public class CustomTexturesCmd : ConsoleCmdAbstract
                         Log.Out("{0}: {1} {2}", i, uvs[i].textureName, uvs[i].ToString());
                     }
                     break;
+                case "foo":
+                    MicroSplatPropData prop = VoxelMeshTerrainPropData.Get(null);
+                    if (prop == null) break;
+                    for (int n = 0; n < 32; n++)
+                        Log.Out("Pixel[0,{0}] => {1}", n, prop.GetValue(3, n));
+
+                    var x = 24;
+
+                    // prop.SetValue(x, MicroSplatPropData.PerTexVector2.SplatUVScale, Vector2.one);
+                    // ssprop.SetValue(x, MicroSplatPropData.PerTexVector2.SplatUVOffset, Vector2.zero);
+
+
+                    for (int n = 0; n < 32; n++)
+                        for (int i = 2; i < 32; i++)
+                            prop.SetValue(i, n, prop.GetValue(0, n));
+
+                    OcbCustomTextures.LockCustomBiomeLayers = true;
+                    Log.Out("Resetting old prop texture {0}",
+                        MicroSplatPropDataTexture.Get(prop));
+                    MicroSplatPropDataTexture.Set(prop, null);
+                    Log.Out(" set now prop texture {0}",
+                        MicroSplatPropDataTexture.Get(prop));
+                    var tex = prop.GetTexture();
+                    tex.Apply();
+                    VoxelMeshTerrainPropTex.Set(null, tex);
+                    OcbCustomTextures.LockCustomBiomeLayers = false;
+                    DynamicMeshManager.Instance.RefreshAll();
+
+                    break;
+                // ct layer 14
+                case "layer":
+                    var idx = int.Parse(_params[1]);
+                    var data = VoxelMeshTerrainProcData.Get(null);
+                    var layer = data.layers[idx];
+                    Log.Out("<property name=\"weight\" value=\"{0}\"/>", layer.weight);
+                    Log.Out("<property name=\"noise-active\" value=\"{0}\"/>", layer.noiseActive);
+                    Log.Out("<property name=\"noise-frequency\" value=\"{0}\"/>", layer.noiseFrequency);
+                    Log.Out("<property name=\"noise-offset\" value=\"{0}\"/>", layer.noiseOffset);
+                    Log.Out("<property name=\"noise-range\" value=\"{0}\"/>", layer.noiseRange);
+
+                    Log.Out("<property name=\"height-active\" value=\"{0}\"/>", layer.heightActive);
+                    Log.Out("<property name=\"slope-active\" value=\"{0}\"/>", layer.slopeActive);
+                    Log.Out("<property name=\"erosion-active\" value=\"{0}\"/>", layer.erosionMapActive);
+                    Log.Out("<property name=\"cavity-active\" value=\"{0}\"/>", layer.cavityMapActive);
+
+                    Log.Out("<property name=\"height-curve-mode\" value=\"{0}\"/>", layer.heightCurveMode);
+                    Log.Out("<property name=\"slope-curve-mode\" value=\"{0}\"/>", layer.slopeCurveMode);
+                    Log.Out("<property name=\"erosion-curve-mode\" value=\"{0}\"/>", layer.erosionCurveMode);
+                    Log.Out("<property name=\"cavity-curve-mode\" value=\"{0}\"/>", layer.cavityCurveMode);
+
+                    Log.Out("<property name=\"microsplat-index\" value=\"{0}\"/>", layer.textureIndex);
+                    Log.Out("<property name=\"biome-weight-1\" value=\"{0}\"/>", layer.biomeWeights);
+                    Log.Out("<property name=\"biome-weight-2\" value=\"{0}\"/>", layer.biomeWeights2);
+
+                    if (layer.heightCurve?.length >= 0)
+                    {
+                        Log.Out("<height-keyframes>");
+                        foreach (var frame in layer.heightCurve.keys)
+                            Log.Out("  <keyframe time=\"{0}\" value=\"{1}\" />",
+                                frame.time, frame.value);
+                        Log.Out("</height-keyframes>");
+                    }
+
+                    if (layer.slopeCurve?.length >= 0)
+                    {
+                        Log.Out("<slope-keyframes>");
+                        foreach (var frame in layer.slopeCurve.keys)
+                            Log.Out("  <keyframe time=\"{0}\" value=\"{1}\" />",
+                                frame.time, frame.value);
+                        Log.Out("</slope-keyframes>");
+                    }
+                    break;
                 default:
                     Log.Warning("Unknown command " + _params[0]);
                     break;
             }
         }
-        
+
         else if (_params.Count == 4)
         {
             switch (_params[0])
@@ -263,6 +432,41 @@ public class CustomTexturesCmd : ConsoleCmdAbstract
                         FooBarRunner = null;
                     }
                     break;
+                // ct layer 14 weight 123
+                case "layer":
+                    var idx = int.Parse(_params[1]);
+                    var data = VoxelMeshTerrainProcData.Get(null);
+                    var layer = data.layers[idx];
+                    switch (_params[2])
+                    {
+                        case "weight": layer.weight = float.Parse(_params[3]); break;
+                        case "noise-active": layer.noiseActive = bool.Parse(_params[3]); break;
+                        case "noise-frequency": layer.noiseFrequency = float.Parse(_params[3]); break;
+                        case "noise-offset": layer.noiseOffset = float.Parse(_params[3]); break;
+                        case "noise-range": layer.noiseRange = StringParsers.ParseVector2(_params[3]); break;
+                        case "height-active": layer.heightActive = bool.Parse(_params[3]); break;
+                        case "slope-active": layer.slopeActive = bool.Parse(_params[3]); break;
+                        case "erosion-active": layer.erosionMapActive = bool.Parse(_params[3]); break;
+                        case "cavity-active": layer.cavityMapActive = bool.Parse(_params[3]); break;
+                        case "height-curve-mode": layer.heightCurveMode = EnumUtils.Parse(_params[3],
+                            MicroSplatProceduralTextureConfig.Layer.CurveMode.Curve); break;
+                        case "slope-curve-mode": layer.slopeCurveMode = EnumUtils.Parse(_params[3],
+                            MicroSplatProceduralTextureConfig.Layer.CurveMode.Curve); break;
+                        case "erosion-curve-mode": layer.erosionCurveMode = EnumUtils.Parse(_params[3],
+                            MicroSplatProceduralTextureConfig.Layer.CurveMode.Curve); break;
+                        case "cavity-curve-mode": layer.cavityCurveMode = EnumUtils.Parse(_params[3],
+                            MicroSplatProceduralTextureConfig.Layer.CurveMode.Curve); break;
+                        case "microsplat-index": layer.textureIndex = int.Parse(_params[3]); break;
+                        case "biome-weight-1": layer.biomeWeights = OcbCustomTextures.ParseVector4(_params[3]); break;
+                        case "biome-weight-2": layer.biomeWeights2 = OcbCustomTextures.ParseVector4(_params[3]); break;
+                        default: Log.Warning("Unknown param " + _params[2]); break;
+                    }
+                    OcbCustomTextures.LockCustomBiomeLayers = true;
+                    VoxelMeshTerrainProcCurveTex.Set(null, data.GetCurveTexture());
+                    VoxelMeshTerrainProcParamTex.Set(null, data.GetParamTexture());
+                    OcbCustomTextures.LockCustomBiomeLayers = false;
+                    DynamicMeshManager.Instance.RefreshAll();
+                    break;
                 default:
                     Log.Warning("Unknown command " + _params[0]);
                     break;
@@ -275,4 +479,5 @@ public class CustomTexturesCmd : ConsoleCmdAbstract
         }
 
     }
+
 }

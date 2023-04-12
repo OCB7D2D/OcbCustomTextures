@@ -122,6 +122,28 @@ namespace OCB
             return CreateUniformTexture(width, height, Color.black);
         }
 
+
+        public static Texture2DArray ResizeTextureArray2(Texture2DArray array,
+            int size, bool mipChain = false, bool linear = true, bool destroy = false)
+        {
+            if (array.depth == size) return array;
+            // Create a copy and add space for more textures
+            var copy = new Texture2DArray(array.width, array.height,
+                size, array.format, array.mipmapCount, linear);
+            copy.filterMode = array.filterMode;
+            if (!copy.name.Contains("extended_"))
+                copy.name = "extended_" + array.name;
+            // Copy old textures to new copy (any better way?)
+            for (int i = 0; i < Mathf.Min(array.depth, size); i++)
+            {
+                Graphics.CopyTexture(array, i, copy, i);
+            }
+            // Optionally destroy the original object
+            // if (destroy) UnityEngine.Object.Destroy(array);
+            // Return the copy
+            return copy;
+        }
+
         public static Texture2DArray ResizeTextureArray(Texture2DArray array,
             int size, bool mipChain = false, bool linear = true, bool destroy = false)
         {
@@ -255,22 +277,21 @@ namespace OCB
         {
             if (arr == null) return;
 
-            bool linear = !GraphicsFormatUtility.IsSRGBFormat(arr.graphicsFormat);
-            // Create a copy and add space for more textures
-            var copy = new Texture2DArray(arr.width, arr.height,
-                1, arr.format, true, linear);
-            // Copy old textures to new copy (any better way?)
-            Graphics.CopyTexture(arr, idx, copy, 0);
-            Texture2D cpy = new Texture2D(
-                arr.width, arr.height,
-                TextureFormat.RGB24, false);
-            cpy.filterMode = FilterMode.Trilinear;
-            cpy.wrapMode = TextureWrapMode.Clamp;
-            var pixels = copy.GetPixels32(0);
-            if (converter != null) pixels = converter(pixels);
-            cpy.SetPixels32(pixels);
+            Log.Out("Dump {0} => {1}", path, arr.isReadable);
+            var cpy = new Texture2D(arr.width, arr.height,
+                arr.format, arr.mipmapCount, true);
+            Graphics.CopyTexture(arr, idx, cpy, 0);
+            cpy = cpy.DeCompress(); // Required!
+            if (converter != null)
+            {
+                var pixels = cpy.GetPixels32(0);
+                pixels = converter(pixels);
+                cpy.SetPixels32(pixels);
+                cpy.Apply(true, false);
+            }
             byte[] bytes = cpy.EncodeToPNG();
-            System.IO.File.WriteAllBytes(path, bytes);
+            File.WriteAllBytes(path, bytes);
+
         }
 
         static public List<Texture2D> GetAtlasSprites(Texture2D atlas, List<UVRectTiling> tiles)

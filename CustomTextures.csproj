@@ -83,9 +83,12 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Harmony\MoreBiomesPOC.cs" />
     <Compile Include="Library\BlockCustomTerrain.cs" />
     <Compile Include="Library\CustomTexturesCmd.cs" />
     <Compile Include="Harmony\CustomTextures.cs" />
+    <Compile Include="Library\HarmonyFieldProxy.cs" />
+    <Compile Include="Library\HarmonyPropertyProxy.cs" />
     <Compile Include="Library\HelperGrassTextures.cs" />
     <Compile Include="Library\TextureAtlasUtils.cs" />
     <Compile Include="Library\TextureConfig.cs" />
