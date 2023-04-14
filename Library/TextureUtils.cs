@@ -277,20 +277,39 @@ namespace OCB
         {
             if (arr == null) return;
 
-            Log.Out("Dump {0} => {1}", path, arr.isReadable);
-            var cpy = new Texture2D(arr.width, arr.height,
-                arr.format, arr.mipmapCount, true);
-            Graphics.CopyTexture(arr, idx, cpy, 0);
-            cpy = cpy.DeCompress(); // Required!
-            if (converter != null)
+            if (arr.isReadable && GameOptionsManager.GetTextureQuality() > 0)
             {
-                var pixels = cpy.GetPixels32(0);
-                pixels = converter(pixels);
-                cpy.SetPixels32(pixels);
-                cpy.Apply(true, false);
+                var cpy = new Texture2D(arr.width, arr.height,
+                    arr.format, arr.mipmapCount, true);
+                Graphics.CopyTexture(arr, idx, cpy, 0);
+                // cpy = cpy.DeCompress(); // Required!
+                if (converter != null)
+                {
+                    var pixels = cpy.GetPixels32(0);
+                    pixels = converter(pixels);
+                    cpy.SetPixels32(pixels);
+                    cpy.Apply(true, false);
+                }
+                byte[] bytes = cpy.EncodeToPNG();
+                File.WriteAllBytes(path, bytes);
             }
-            byte[] bytes = cpy.EncodeToPNG();
-            File.WriteAllBytes(path, bytes);
+            else
+            {
+                var cpy = new Texture2D(arr.width, arr.height,
+                    arr.format, arr.mipmapCount, true);
+                Graphics.CopyTexture(arr, idx, cpy, 0);
+                cpy = cpy.DeCompress(); // Required!
+                if (converter != null)
+                {
+                    var pixels = cpy.GetPixels32(0);
+                    pixels = converter(pixels);
+                    cpy.SetPixels32(pixels);
+                    cpy.Apply(true, false);
+                }
+                byte[] bytes = cpy.EncodeToPNG();
+                File.WriteAllBytes(path, bytes);
+            }
+
 
         }
 

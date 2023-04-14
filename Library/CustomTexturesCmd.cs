@@ -307,36 +307,6 @@ public class CustomTexturesCmd : ConsoleCmdAbstract
                         Log.Out("{0}: {1} {2}", i, uvs[i].textureName, uvs[i].ToString());
                     }
                     break;
-                case "foo":
-                    MicroSplatPropData prop = VoxelMeshTerrainPropData.Get(null);
-                    if (prop == null) break;
-                    for (int n = 0; n < 32; n++)
-                        Log.Out("Pixel[0,{0}] => {1}", n, prop.GetValue(3, n));
-
-                    var x = 24;
-
-                    // prop.SetValue(x, MicroSplatPropData.PerTexVector2.SplatUVScale, Vector2.one);
-                    // ssprop.SetValue(x, MicroSplatPropData.PerTexVector2.SplatUVOffset, Vector2.zero);
-
-
-                    for (int n = 0; n < 32; n++)
-                        for (int i = 2; i < 32; i++)
-                            prop.SetValue(i, n, prop.GetValue(0, n));
-
-                    OcbCustomTextures.LockCustomBiomeLayers = true;
-                    Log.Out("Resetting old prop texture {0}",
-                        MicroSplatPropDataTexture.Get(prop));
-                    MicroSplatPropDataTexture.Set(prop, null);
-                    Log.Out(" set now prop texture {0}",
-                        MicroSplatPropDataTexture.Get(prop));
-                    var tex = prop.GetTexture();
-                    tex.Apply();
-                    VoxelMeshTerrainPropTex.Set(null, tex);
-                    OcbCustomTextures.LockCustomBiomeLayers = false;
-                    DynamicMeshManager.Instance.RefreshAll();
-
-                    break;
-                // ct layer 14
                 case "layer":
                     var idx = int.Parse(_params[1]);
                     var data = VoxelMeshTerrainProcData.Get(null);

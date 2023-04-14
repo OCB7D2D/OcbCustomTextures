@@ -9,9 +9,6 @@ using UnityEngine.Experimental.Rendering;
 using static OCB.TextureUtils;
 using static OCB.TextureAtlasUtils;
 using static StringParsers;
-using XMLData;
-using System.Security.Policy;
-using UnityEngine.Assertions;
 
 /*
 // MicroSplat Texture2DArray
@@ -1036,18 +1033,39 @@ public class OcbCustomTextures : IModApi
         }
     }
 
-    /*
-    [HarmonyPatch(typeof(VoxelMeshTerrain))]
-    [HarmonyPatch("ConfigureTerrainMaterial")]
-    public class ConfigureTerrainMaterial
+    [HarmonyPatch(typeof(VoxelMeshTerrain), "GetColorForTextureId")]
+    [HarmonyPatch(new Type[] { typeof(int), typeof(bool), typeof(Color), typeof(Vector2), typeof(Vector2), typeof(Vector2), typeof(Vector2) },
+        new ArgumentType[] { ArgumentType.Normal, ArgumentType.Normal, ArgumentType.Out, ArgumentType.Out, ArgumentType.Out, ArgumentType.Out, ArgumentType.Out })]
+    public class VoxelMeshTerrainGetColorForTextureId
     {
-        public static void Prefix(VoxelMeshTerrain __instance,
-            MicroSplatProceduralTextureConfig ___msProcData)
+        public static void Prefix(ref bool _bTopSoil)
         {
-            Log.Out("VixelMeshTerrain COnfigure {0}", ___msProcData.layers.Count);
+            _bTopSoil = false;
         }
     }
-    */
+
+    [HarmonyPatch(typeof(VoxelMeshTerrain))]
+    [HarmonyPatch("ConfigureTerrainMaterial")]
+    public class VoxelMeshTerrainConfigureTerrainMaterial
+    {
+        static Color col = new Color(0, 0, 0, 0);
+        static Texture2D black = null;
+        public static void Postfix(Material mat,
+            ChunkProviderGenerateWorldFromRaw cpr)
+        {
+            if (black == null || black.width != black.width)
+            {
+                var splat = cpr.splats[0];
+                black = new Texture2D(splat.width, splat.height);
+                for (int x = 0; x < black.width; x++)
+                    for (int y = 0; y < black.width; y++)
+                        black.SetPixel(x, y, col);
+                black.Apply(true, true);
+            }
+            mat.SetTexture("_CustomControl0", black);
+            mat.SetTexture("_CustomControl1", black);
+        }
+    }
 
     /*
         MicroSplatPropData prop = VoxelMeshTerrainPropData.Get(null);
