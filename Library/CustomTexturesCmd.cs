@@ -431,10 +431,8 @@ public class CustomTexturesCmd : ConsoleCmdAbstract
                         case "biome-weight-2": layer.biomeWeights2 = OcbCustomTextures.ParseVector4(_params[3]); break;
                         default: Log.Warning("Unknown param " + _params[2]); break;
                     }
-                    OcbCustomTextures.LockCustomBiomeLayers = true;
                     VoxelMeshTerrainProcCurveTex.Set(null, data.GetCurveTexture());
                     VoxelMeshTerrainProcParamTex.Set(null, data.GetParamTexture());
-                    OcbCustomTextures.LockCustomBiomeLayers = false;
                     DynamicMeshManager.Instance.RefreshAll();
                     break;
                 default:

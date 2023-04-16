@@ -9,6 +9,11 @@ using UnityEngine.Experimental.Rendering;
 using static OCB.TextureUtils;
 using static OCB.TextureAtlasUtils;
 using static StringParsers;
+using UnityEngine.Assertions;
+using static OcbCustomTextures;
+using static MicroSplatProceduralTextureConfig;
+using static EventDelegate;
+using static Twitch.TwitchManager;
 
 /*
 // MicroSplat Texture2DArray
@@ -61,7 +66,7 @@ public class OcbCustomTextures : IModApi
     static readonly List<TextureConfig> CustomGrass = new List<TextureConfig>();
     static readonly List<MicroSplatConfig> CustomMicroSplat = new List<MicroSplatConfig>();
 
-    
+
     static readonly Dictionary<int, CustomBiomeLayer> CustomBiomeLayers = new Dictionary<int, CustomBiomeLayer>();
     public static readonly Dictionary<int, CustomBiomeColor> CustomBiomeColors = new Dictionary<int, CustomBiomeColor>();
 
@@ -89,8 +94,11 @@ public class OcbCustomTextures : IModApi
         public List<Keyframe> erosions;
     }
 
+    static Mod MOD;
+
     public void InitMod(Mod mod)
     {
+        MOD = mod;
         Debug.Log("Loading OCB Texture Atlas Patch: " + GetType().ToString());
         new Harmony(GetType().ToString()).PatchAll(Assembly.GetExecutingAssembly());
         if (GameManager.IsDedicatedServer) return; // Don't patch server instance
@@ -105,6 +113,7 @@ public class OcbCustomTextures : IModApi
         else if (Quality == 3 && quality == 2) { Quality = 2; return; }
         var opaque = MeshDescription.meshes[MeshDescription.MESH_OPAQUE];
         var terrain = MeshDescription.meshes[MeshDescription.MESH_TERRAIN];
+
         // Make enough space available
         if (OpaquesAdded > 0)
         {
@@ -152,17 +161,6 @@ public class OcbCustomTextures : IModApi
         }
         if (GameManager.Instance != null && GameManager.Instance.prefabLODManager != null)
             GameManager.Instance.prefabLODManager.UpdateMaterials();
-    }
-
-    private static void ApplyCustomMicroSplats(MeshDescription terrain)
-    {
-        int maxMicroSplatIndex = 0;
-        foreach (var texture in CustomMicroSplat) maxMicroSplatIndex
-            = Math.Max(maxMicroSplatIndex, texture.Index + 1);
-        ExtendMicroSplatTexture(terrain, maxMicroSplatIndex);
-        foreach (var texture in CustomMicroSplat)
-            PatchMicroSplatTexture(terrain, texture);
-        terrain.ReloadTextureArrays(false);
     }
 
     public void GameStartDone()
@@ -313,6 +311,9 @@ public class OcbCustomTextures : IModApi
         return FullBlankNormalTexture = CreateNormalTexture(2048, 2048);
     }
 
+    // dist: 0, 1, 2, 3, 7, 8, 10, 11, 12
+    // local: 0, 1, 2, 3
+
     // Layer 0 => (1.0, 0.0, 0.0, 0.0) and (0.0, 0.0, 0.0, 0.0) => texture 1
     // Layer 1 => (1.0, 0.0, 0.0, 0.0) and (0.0, 0.0, 0.0, 0.0) => texture 0
     // Layer 2 => (0.0, 1.0, 0.0, 0.0) and (0.0, 0.0, 0.0, 0.0) => texture 1
@@ -326,60 +327,56 @@ public class OcbCustomTextures : IModApi
     // Layer 10 => (0.0, 0.0, 0.0, 0.0) and (1.0, 0.0, 0.0, 0.0) => texture 12
     // Layer 11 => (0.0, 0.0, 0.0, 0.0) and (1.0, 0.0, 0.0, 0.0) => texture 11
 
-    public static bool LockCustomBiomeLayers = false;
-
-    [HarmonyPatch(typeof(MicroSplatProceduralTextureConfig), "GetCurveTexture")]
-    class MicroSplatProceduralTextureConfigGetCurveTexture
+    static void PatchBiomeLayers(List<Layer> layers)
     {
-        static void Prefix(MicroSplatProceduralTextureConfig __instance)
+        foreach (var kv in CustomBiomeLayers)
         {
-            if (LockCustomBiomeLayers) return;
-            foreach (var kv in CustomBiomeLayers)
+            var index = kv.Key;
+            var props = kv.Value.props;
+            while (index >= layers.Count)
             {
-                var index = kv.Key;
-                var props = kv.Value.props;
-                while (index >= __instance.layers.Count)
-                {
-                    Log.Out("Adding new Layer {0}", __instance.layers.Count);
-                    __instance.layers.Add(new MicroSplatProceduralTextureConfig.Layer());
-                }
-                var layer = __instance.layers[index];
-                props.ParseFloat("weight", ref layer.weight);
-                props.ParseBool("noise-active", ref layer.noiseActive);
-                props.ParseFloat("noise-frequency", ref layer.noiseFrequency);
-                props.ParseFloat("noise-offset", ref layer.noiseOffset);
-                props.ParseVec("noise-range", ref layer.noiseRange);
-                props.ParseBool("height-active", ref layer.heightActive);
-                props.ParseBool("slope-active", ref layer.slopeActive);
-                props.ParseBool("erosion-active", ref layer.erosionMapActive);
-                props.ParseBool("cavity-active", ref layer.cavityMapActive);
-                props.ParseEnum("height-curve-mode", ref layer.heightCurveMode);
-                props.ParseEnum("slope-curve-mode", ref layer.slopeCurveMode);
-                props.ParseEnum("erosion-curve-mode", ref layer.erosionCurveMode);
-                props.ParseEnum("cavity-curve-mode", ref layer.cavityCurveMode);
-                props.ParseInt("microsplat-index", ref layer.textureIndex);
-                if (props.Contains("biome-weight-1")) layer.biomeWeights =
-                    ParseVector4(props.GetString("biome-weight-1"));
-                if (props.Contains("biome-weight-2")) layer.biomeWeights2 =
-                    ParseVector4(props.GetString("biome-weight-2"));
-                if (kv.Value.heights != null) layer.heightCurve.keys = kv.Value.heights.ToArray();
-                if (kv.Value.slopes != null) layer.slopeCurve.keys = kv.Value.slopes.ToArray();
-                if (kv.Value.erosions != null) layer.erosionMapCurve.keys = kv.Value.erosions.ToArray();
-                if (kv.Value.cavities != null) layer.cavityMapCurve.keys = kv.Value.cavities.ToArray();
-                Log.Out("Set {0}: tex {1}, weights: {2}/{3}/{4}",
-                    index, layer.textureIndex, layer.weight,
-                    layer.biomeWeights, layer.biomeWeights2);
+                // Log.Out("Adding new Layer {0}", layers.Count);
+                layers.Add(new MicroSplatProceduralTextureConfig.Layer());
             }
-
+            var layer = layers[index];
+            props.ParseFloat("weight", ref layer.weight);
+            props.ParseBool("noise-active", ref layer.noiseActive);
+            props.ParseFloat("noise-frequency", ref layer.noiseFrequency);
+            props.ParseFloat("noise-offset", ref layer.noiseOffset);
+            props.ParseVec("noise-range", ref layer.noiseRange);
+            props.ParseBool("height-active", ref layer.heightActive);
+            props.ParseBool("slope-active", ref layer.slopeActive);
+            props.ParseBool("erosion-active", ref layer.erosionMapActive);
+            props.ParseBool("cavity-active", ref layer.cavityMapActive);
+            props.ParseEnum("height-curve-mode", ref layer.heightCurveMode);
+            props.ParseEnum("slope-curve-mode", ref layer.slopeCurveMode);
+            props.ParseEnum("erosion-curve-mode", ref layer.erosionCurveMode);
+            props.ParseEnum("cavity-curve-mode", ref layer.cavityCurveMode);
+            props.ParseInt("microsplat-index", ref layer.textureIndex);
+            if (props.Contains("biome-weight-1")) layer.biomeWeights =
+                ParseVector4(props.GetString("biome-weight-1"));
+            if (props.Contains("biome-weight-2")) layer.biomeWeights2 =
+                ParseVector4(props.GetString("biome-weight-2"));
+            if (kv.Value.heights != null) layer.heightCurve.keys = kv.Value.heights.ToArray();
+            if (kv.Value.slopes != null) layer.slopeCurve.keys = kv.Value.slopes.ToArray();
+            if (kv.Value.erosions != null) layer.erosionMapCurve.keys = kv.Value.erosions.ToArray();
+            if (kv.Value.cavities != null) layer.cavityMapCurve.keys = kv.Value.cavities.ToArray();
+            // Log.Out("Set {0}: tex {1}, weights: {2}/{3}/{4}",
+            //     index, layer.textureIndex, layer.weight,
+            //     layer.biomeWeights, layer.biomeWeights2);
         }
     }
 
     public static void ExtendMicroSplatTexture(MeshDescription mesh, int size)
     {
-        if (!mesh.IsSplatmap(MeshDescription.MESH_TERRAIN)) return;
         if (mesh == null) throw new Exception("MESH MISSING");
-        var atlas = mesh.textureAtlas as TextureAtlasTerrain;
+        if (!mesh.IsSplatmap(MeshDescription.MESH_TERRAIN)) return;
+        TextureAtlasTerrain atlas = mesh.textureAtlas as TextureAtlasTerrain;
+        if (atlas == null) return;
         Quality = GameOptionsManager.GetTextureQuality();
+        if (atlas.diffuseTexture == null) throw new Exception("Expected diffuse texture");
+        if (atlas.normalTexture == null) throw new Exception("Expected normalTexture texture");
+        if (atlas.specularTexture == null) throw new Exception("Expected specularTexture texture");
         if (!(atlas.diffuseTexture is Texture2DArray albedos))
             throw new Exception("Expected Texture2DArray for diffuse");
         if (!(atlas.normalTexture is Texture2DArray normals))
@@ -389,7 +386,7 @@ public class OcbCustomTextures : IModApi
         mesh.TexDiffuse = atlas.diffuseTexture = ExtendMicroSplatTexture(albedos, size);
         mesh.TexNormal = atlas.normalTexture = ExtendMicroSplatTexture(normals, size);
         mesh.TexSpecular = atlas.specularTexture = ExtendMicroSplatTexture(speculars, size);
-        mesh.ReloadTextureArrays(true);
+        // mesh.ReloadTextureArrays(true);
 
     }
 
@@ -399,17 +396,17 @@ public class OcbCustomTextures : IModApi
         return ResizeTextureArray2(tarr, size, false, false);
     }
 
-    public static void PatchMicroSplatTexture(MeshDescription mesh, MicroSplatConfig cfg)
+    public static void PatchMicroSplatTexture(Texture diffuseTexture, Texture normalTexture, Texture specularTexture, MicroSplatConfig cfg)
     {
-        if (!mesh.IsSplatmap(MeshDescription.MESH_TERRAIN)) return;
-        if (mesh == null) throw new Exception("MESH MISSING");
-        var atlas = mesh.textureAtlas as TextureAtlasTerrain;
+        // if (mesh == null) throw new Exception("MESH MISSING");
+        // if (!mesh.IsSplatmap(MeshDescription.MESH_TERRAIN)) return; 
+        // var atlas = mesh.textureAtlas as TextureAtlasTerrain;
         Quality = GameOptionsManager.GetTextureQuality();
-        if (!(atlas.diffuseTexture is Texture2DArray albedos))
+        if (!(diffuseTexture is Texture2DArray albedos))
             throw new Exception("Expected Texture2DArray for diffuse");
-        if (!(atlas.normalTexture is Texture2DArray normals))
+        if (!(normalTexture is Texture2DArray normals))
             throw new Exception("Expected Texture2DArray for normal");
-        if (!(atlas.specularTexture is Texture2DArray speculars))
+        if (!(specularTexture is Texture2DArray speculars))
             throw new Exception("Expected Texture2DArray for specular");
         PatchMicroSplatTexture(albedos, cfg.Diffuse.Path, cfg.Index);
         if (cfg.Normal != null) PatchMicroSplatTexture(
@@ -584,6 +581,7 @@ public class OcbCustomTextures : IModApi
 
                 var opaque = MeshDescription.meshes[MeshDescription.MESH_OPAQUE];
                 var terrain = MeshDescription.meshes[MeshDescription.MESH_TERRAIN];
+
                 var opaqueAtlas = opaque.textureAtlas as TextureAtlasBlocks;
                 var terrainAtlas = terrain.textureAtlas as TextureAtlasTerrain;
 
@@ -1044,15 +1042,175 @@ public class OcbCustomTextures : IModApi
         }
     }
 
+    readonly static HarmonyFieldProxy<MicroSplatProceduralTextureConfig> VoxelMeshTerrainProcData =
+        new HarmonyFieldProxy<MicroSplatProceduralTextureConfig>(typeof(VoxelMeshTerrain), "msProcData");
+
+    static MethodInfo InitStatic = AccessTools.Method(typeof(VoxelMeshTerrain), "InitMicroSplat");
+
+    public static Texture2D GetParamTexture(List<Layer> layers)
+    {
+
+        // Compress layers, will need to redo-copy textures
+        // for (int i = 0; i < layers.Count; i++)
+        // {
+        //     Layer layer = layers[i];
+        //     Log.Out("Inc Layer {0} => {1}/{2} #{3} x {4}", i,
+        //         layer.biomeWeights, layer.biomeWeights2,
+        //         layer.textureIndex, layer.weight);
+        // }
+
+        int height = 32;
+        int num = 4;
+        var paramTex = new Texture2D(num, height, TextureFormat.RGBAHalf, mipChain: false, linear: true);
+        paramTex.hideFlags = HideFlags.HideAndDontSave;
+
+        Color color = new Color(0f, 0f, 0f, 0f);
+        for (int i = 0; i < layers.Count; i++)
+        {
+            Color color2 = color;
+            Color color3 = color;
+            if (layers[i].noiseActive)
+            {
+                color2.r = layers[i].noiseFrequency;
+                color2.g = layers[i].noiseRange.x;
+                color2.b = layers[i].noiseRange.y;
+                color2.a = layers[i].noiseOffset;
+            }
+
+            color3.r = layers[i].weight;
+            color3.g = layers[i].textureIndex;
+            // Log.Out("Set layer {0} to texture {1}",
+            //     i, layers[i].textureIndex);
+            paramTex.SetPixel(0, i, color2);
+            paramTex.SetPixel(1, i, color3);
+            Vector4 biomeWeights = layers[i].biomeWeights;
+            paramTex.SetPixel(2, i, new Color(biomeWeights.x, biomeWeights.y, biomeWeights.z, biomeWeights.w));
+            Vector4 biomeWeights2 = layers[i].biomeWeights2;
+            paramTex.SetPixel(3, i, new Color(biomeWeights2.x, biomeWeights2.y, biomeWeights2.z, biomeWeights2.w));
+        }
+
+        paramTex.Apply(updateMipmaps: false, makeNoLongerReadable: false);
+        return paramTex;
+    }
+
+    static Texture2DArray DiffDetailTexArr;
+    static Texture2DArray NormDetailTexArr;
+    static Texture2DArray SsaoDetailTexArr;
+    static Texture2D _msProcCurveTex;
+    static Texture2D _msProcParamTex;
+
+    private static void ApplyCustomMicroSplats(MeshDescription terrain)
+    {
+        int maxMicroSplatIndex = 0;
+
+        var src = terrain.TexDiffuse as Texture2DArray;
+        var src2 = terrain.TexNormal as Texture2DArray;
+        var src3 = terrain.TexSpecular as Texture2DArray;
+
+        InitStatic.Invoke(null, null);
+        var orgProcData = VoxelMeshTerrainProcData.Get(null);
+
+        // for (int i = 0; i < orgProcData.layers.Count; i++)
+        // {
+        //     Layer layer = orgProcData.layers[i];
+        //     Log.Out("Old Layer {0} => {1}/{2} #{3} x {4}", i,
+        //         layer.biomeWeights, layer.biomeWeights2,
+        //         layer.textureIndex, layer.weight);
+        // }
+
+        PatchBiomeLayers(orgProcData.layers);
+
+        var cfg = UnityEngine.Object.Instantiate(orgProcData);
+        cfg.proceduralCurveTextureSize = orgProcData.proceduralCurveTextureSize;
+        cfg.heightGradients = new List<Gradient>(orgProcData.heightGradients);
+        cfg.heightHSV = new List<HSVCurve>(orgProcData.heightHSV);
+        cfg.slopeGradients = new List<Gradient>(orgProcData.slopeGradients);
+        cfg.slopeHSV = new List<HSVCurve>(orgProcData.slopeHSV);
+        cfg.layers = new List<Layer>(orgProcData.layers);
+
+        for(int i = 0; i < cfg.layers.Count; i++)
+        {
+            cfg.layers[i] = cfg.layers[i].Copy();
+        }
+
+        Dictionary<int, int> mapping = GetLayerMap(orgProcData.layers, out int size);
+
+        var diff = new Texture2DArray(src.width, src.height, size,
+            src.graphicsFormat, TextureCreationFlags.MipChain);
+
+        var norm = new Texture2DArray(src2.width, src2.height, size,
+            src2.graphicsFormat, TextureCreationFlags.MipChain);
+
+        var ssao = new Texture2DArray(src3.width, src3.height, size,
+            src3.graphicsFormat, TextureCreationFlags.MipChain);
+
+        DiffDetailTexArr = diff;
+        NormDetailTexArr = norm;
+        SsaoDetailTexArr = ssao;
+
+        // ToDo: check which ones are not set below
+        // We only need to copy the rest/fixed ones
+        for (int i = 0; i < size; i++)
+        {
+            Graphics.CopyTexture(src, i, diff, i);
+            Graphics.CopyTexture(src2, i, norm, i);
+            Graphics.CopyTexture(src3, i, ssao, i);
+        }
+
+        foreach (var texture in CustomMicroSplat) maxMicroSplatIndex
+            = Math.Max(maxMicroSplatIndex, texture.Index + 1);
+        ExtendMicroSplatTexture(terrain, maxMicroSplatIndex);
+        foreach (var texture in CustomMicroSplat)
+        {
+            PatchMicroSplatTexture(
+                terrain.TexDiffuse,
+                terrain.TexNormal,
+                terrain.TexSpecular,
+                texture);
+        }
+
+        for (int i = 0; i < cfg.layers.Count; i++)
+        {
+            Layer layer = cfg.layers[i];
+            var srcId = layer.textureIndex;
+            var dstId = mapping[layer.textureIndex];
+            layer.textureIndex = dstId;
+            // Log.Out("Map {0} => {1}", srcId, dstId);
+            Graphics.CopyTexture(src, srcId, diff, dstId);
+            Graphics.CopyTexture(src2, srcId, norm, dstId);
+            Graphics.CopyTexture(src3, srcId, ssao, dstId);
+        }
+
+        // for (int i = 0; i < cfg.layers.Count; i++)
+        // {
+        //     Layer layer = cfg.layers[i];
+        //     Log.Out("New Layer {0} => {1}/{2} #{3} x {4}", i,
+        //         layer.biomeWeights, layer.biomeWeights2,
+        //         layer.textureIndex, layer.weight);
+        // }
+
+        _msProcCurveTex = cfg.GetCurveTexture();
+        _msProcParamTex = GetParamTexture(cfg.layers);
+
+
+        terrain.ReloadTextureArrays(true);
+    }
+
+
     [HarmonyPatch(typeof(VoxelMeshTerrain))]
     [HarmonyPatch("ConfigureTerrainMaterial")]
     public class VoxelMeshTerrainConfigureTerrainMaterial
     {
         static Color col = new Color(0, 0, 0, 0);
         static Texture2D black = null;
+
+
         public static void Postfix(Material mat,
             ChunkProviderGenerateWorldFromRaw cpr)
         {
+
+            MeshDescription mesh = MeshDescription.meshes[MeshDescription.MESH_TERRAIN];
+            
             if (black == null || black.width != black.width)
             {
                 var splat = cpr.splats[0];
@@ -1062,33 +1220,85 @@ public class OcbCustomTextures : IModApi
                         black.SetPixel(x, y, col);
                 black.Apply(true, true);
             }
-            mat.SetTexture("_CustomControl0", black);
-            mat.SetTexture("_CustomControl1", black);
+
+            if (mat == mesh.materialDistant)
+            {
+                mesh.materialDistant.SetTexture("_Diffuse", DiffDetailTexArr);
+                mesh.materialDistant.SetTexture("_NormalSAO", NormDetailTexArr);
+                mesh.materialDistant.SetTexture("_SmoothAO", SsaoDetailTexArr);
+                mat.SetTexture("_ProcTexCurves", _msProcCurveTex);
+                mat.SetTexture("_ProcTexParams", _msProcParamTex);
+            }
+            else
+            {
+                mat.SetTexture("_CustomControl0", black);
+                mat.SetTexture("_CustomControl1", black);
+            }
+
         }
+
     }
 
-    /*
-        MicroSplatPropData prop = VoxelMeshTerrainPropData.Get(null);
-            for (int n = 0; n< 32; n++) prop.SetValue(24, n, prop.GetValue(3, n));
-            for (int n = 0; n< 32; n++) prop.SetValue(25, n, prop.GetValue(3, n));
-            for (int n = 0; n< 32; n++) prop.SetValue(26, n, prop.GetValue(3, n));
-            for (int n = 0; n< 32; n++) prop.SetValue(27, n, prop.GetValue(3, n));
-    */
-
-    /*
-        [HarmonyPatch(typeof(VoxelMeshTerrain))]
-        [HarmonyPatch("InitMicroSplat")]
-        public class VoxelMeshTerrainInitMicroSplat
+    private static Dictionary<int, int> GetLayerMap(List<Layer> layers, out int size)
+    {
+        var map = new Dictionary<int, int>();
+        var t = 0;
+        for (int i = 0; i < layers.Count; i++)
         {
-            public static void Postfix(MicroSplatProceduralTextureConfig ___msProcData,
-                ref Texture2D ___msProcCurveTex, ref Texture2D ___msProcParamTex)
-            {
-                // ___msProcData = Resources.Load<MicroSplatProceduralTextureConfig>("Shaders/MicroSplat/MicroSplatTerrainInGame_proceduraltexture");
-                ___msProcCurveTex = ___msProcData.GetCurveTexture();
-                ___msProcParamTex = ___msProcData.GetParamTexture();
-            }
+            Layer layer = layers[i];
+            // In use by splats
+            if (t == 4) t++;
+            if (t == 5) t++;
+            if (t == 6) t++;
+            if (t == 9) t++;
+            if (t == 10) t++;
+            // if (t == 13) t++;
+            // if (t == 14) t++;
+            if (!map.ContainsKey(layer.textureIndex))
+                map.Add(layer.textureIndex, t++);
         }
-    */
+        size = t;
+        return map;
+    }
+
+
+    private static Dictionary<int, int> GetLayerReMap(List<Layer> layers)
+    {
+        var map = new Dictionary<int, int>();
+        for (int i = 0; i < layers.Count; i++)
+        {
+            Layer layer = layers[i];
+            if (!map.ContainsKey(layer.textureIndex))
+                map.Add(layer.textureIndex, map.Count);
+        }
+        return map;
+    }
+
+    [HarmonyPatch(typeof(VoxelMeshTerrain))]
+    [HarmonyPatch("ApplyMaterials")]
+    public class ReloadTextureArraysMeshDesc
+    {
+        public static bool Prefix(ref bool _bDistant)
+        {
+            // Free up need for splats on close terrain
+            // Frees 4-11, minus 11, 10, 7 (=> 5, 6, 8, 9)
+            // Layer 0 => (1.0, 0.0, 0.0, 0.0) and (0.0, 0.0, 0.0, 0.0) => texture 1
+            // Layer 1 => (1.0, 0.0, 0.0, 0.0) and (0.0, 0.0, 0.0, 0.0) => texture 0
+            // Layer 2 => (0.0, 1.0, 0.0, 0.0) and (0.0, 0.0, 0.0, 0.0) => texture 1
+            // Layer 3 => (0.0, 1.0, 0.0, 0.0) and (0.0, 0.0, 0.0, 0.0) => texture 2
+            // Layer 4 => (0.0, 0.0, 1.0, 0.0) and (0.0, 0.0, 0.0, 0.0) => texture 10
+            // Layer 5 => (0.0, 0.0, 1.0, 0.0) and (0.0, 0.0, 0.0, 0.0) => texture 1
+            // Layer 6 => (0.0, 0.0, 0.0, 1.0) and (0.0, 0.0, 0.0, 0.0) => texture 10
+            // Layer 7 => (0.0, 0.0, 0.0, 1.0) and (0.0, 0.0, 0.0, 0.0) => texture 8
+            // Layer 8 => (0.0, 0.0, 0.0, 0.0) and (1.0, 0.0, 0.0, 0.0) => texture 7
+            // Layer 9 => (0.0, 0.0, 0.0, 0.0) and (1.0, 0.0, 0.0, 0.0) => texture 3
+            // Layer 10 => (0.0, 0.0, 0.0, 0.0) and (1.0, 0.0, 0.0, 0.0) => texture 12
+            // Layer 11 => (0.0, 0.0, 0.0, 0.0) and (1.0, 0.0, 0.0, 0.0) => texture 11
+            _bDistant = false;
+            return true;
+        }
+
+    }
 
     public static Vector4 ParseVector4(string _input)
     {

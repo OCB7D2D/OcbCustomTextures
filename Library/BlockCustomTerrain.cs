@@ -86,15 +86,22 @@ public class BlockCustomTerrain : Block
                 else
                 {
                     // Set custom MicroSplat blend settings
-                    _color = new Color(blend.Dirt, blend.Gravel,
-                        blend.OreCoal, blend.TerrainBlend);
-                    _uv = new Vector2(blend.Asphalt, blend.OreIron);
-                    _uv2 = new Vector2(blend.OreNitrate, blend.StoneRegular);
-                    _uv3 = new Vector2(blend.StoneDesert, blend.OreOil);
-                    _uv4 = new Vector2(blend.OreLead, blend.StoneDestroyed);
+                    _color.r = blend.Dirt;
+                    _color.g = blend.Gravel;
+                    _color.b = blend.OreCoal;
+                    _color.a = blend.TerrainBlend;
+                    _uv.x = blend.Asphalt;
+                    _uv.y = blend.OreIron;
+                    _uv2.x = blend.OreNitrate;
+                    _uv2.y = blend.StoneRegular;
+                    _uv3.x = blend.StoneDesert;
+                    _uv3.y = blend.OreOil;
+                    _uv4.x = blend.OreLead;
+                    _uv4.y = blend.StoneDestroyed;
                     return false;
                 }
             }
+
             // Invoke regular code
             return true;
         }
