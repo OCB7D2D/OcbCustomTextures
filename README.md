@@ -34,8 +34,12 @@ existing texture mipmaps to create lower dimension renditions.
 ```xml
 <configs><append xpath="/paints">
 	<paint id="bark_pine_all_faces" name="txName_bark_pine_all_faces" x="0" y="0" w="2" h="2" blockw="2" blockh="2">
+		<!-- Albedo/Diffuse texture is absolutely necessary, how else would you want to paint a block? -->
 		<property name="Diffuse" value="#@modfolder:Resources/Atlas.unity3d?assets/bark_pine_002_diffuse.jpg,assets/bark_pine_001_diffuse.jpg,assets/bark_pine_002_diffuse.jpg,assets/bark_pine_003_diffuse.jpg"/>
+		<!-- Normal texture is also a must, although you may provide a fully neutral one [rgb => 0.5, 0.5, 1] (translating to normal vector [0, 0, 1]) -->
 		<property name="Normal" value="#@modfolder:Resources/Atlas.unity3d?assets/bark_pine_002_normal.jpg,assets/bark_pine_001_normal.jpg,assets/bark_pine_002_normal.jpg,assets/bark_pine_003_normal.jpg"/>
+		<!-- Optional "Specular" texture is a packed textures, containing four different parameters for the shader, see explanation further below -->
+		<property name="Specular" value="#@modfolder:Resources/Atlas.unity3d?assets/bark_pine_002_pbr.png,assets/bark_pine_001_pbr.png,assets/bark_pine_002_pbr.png,assets/bark_pine_003_pbr.png"/>
 		<property name="Group" value="txGroupDecoration"/>
 		<property name="GlobalUV" value="False" />
 		<property name="SwitchUV" value="False" />
@@ -63,6 +67,28 @@ E.g. `<paint id="141" ... >` to overwrite `Garage Door 2` texture.
 	<property name="Texture" value="demo_terrain"/>
 </block>
 ```
+
+### Optional PBR Standard shader packing format
+
+The shader for the opaque blocks additionally can use another optional
+texture named "Specular". Unfortunately that name was inherited from vanilla
+7D2D, as it seems to actually be a PBR (metallic/roughness/AO) setup instead.
+
+This (DXT5 sRGB) texture uses all four channels to cary material parameters:
+
+> R: Metallic, G: Ambient Occlusion, B: Emission, A: Roughness
+
+You can pack the source textures for these parameters via an image processor
+of your choice, or (recommended) via a channel packer script, e.g.:
+https://github.com/OCB7D2D/UnityTextureChannelPacker
+
+#### Note on the emission parameter (blue channel)
+
+While most regular shaders accept a dedicated RGB texture for the emission,
+this shader only accepts a single channel (blue). It acts as a factor to
+included the regular albedo/diffuse texture regardless of lighting. If your
+source material has a distinct emission texture, you will need to mangle it
+with your albedo texture and mark the emissive parts in the blue channel.
 
 ## Custom grass/plant textures
 
