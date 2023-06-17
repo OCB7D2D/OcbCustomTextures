@@ -1,9 +1,12 @@
-# OCB Core Mod for Custom Texture Atlas  - 7 Days to Die (A20) Addon
+# OCB Core Mod for Custom Texture Atlas  - 7 Days to Die (A21) Addon
 
 This mod doesn't do much on it's own, but it allows other mods to
-add custom block paint and terrain textures.
+add custom (opaque) block paints and grass/plant textures.
 
-See [OcbCustomTexturesDemo][4] for some demo config and resources!
+See demo mods some sample configs and resources!
+
+- https://github.com/OCB7D2D/OcbCustomTexturesDemo
+- https://github.com/OCB7D2D/OcbCustomTexturesPlants
 
 ## Custom Block Paints
 
@@ -33,40 +36,73 @@ existing texture mipmaps to create lower dimension renditions.
 
 ```xml
 <configs><append xpath="/paints">
-	<paint id="bark_pine_all_faces" name="txName_bark_pine_all_faces" x="0" y="0" w="2" h="2" blockw="2" blockh="2">
-		<!-- Albedo/Diffuse texture is absolutely necessary, how else would you want to paint a block? -->
-		<property name="Diffuse" value="#@modfolder:Resources/Atlas.unity3d?assets/bark_pine_002_diffuse.jpg,assets/bark_pine_001_diffuse.jpg,assets/bark_pine_002_diffuse.jpg,assets/bark_pine_003_diffuse.jpg"/>
-		<!-- Normal texture is also a must, although you may provide a fully neutral one [rgb => 0.5, 0.5, 1] (translating to normal vector [0, 0, 1]) -->
-		<property name="Normal" value="#@modfolder:Resources/Atlas.unity3d?assets/bark_pine_002_normal.jpg,assets/bark_pine_001_normal.jpg,assets/bark_pine_002_normal.jpg,assets/bark_pine_003_normal.jpg"/>
-		<!-- Optional "Specular" texture is a packed textures, containing four different parameters for the shader, see explanation further below -->
-		<property name="Specular" value="#@modfolder:Resources/Atlas.unity3d?assets/bark_pine_002_pbr.png,assets/bark_pine_001_pbr.png,assets/bark_pine_002_pbr.png,assets/bark_pine_003_pbr.png"/>
-		<property name="Group" value="txGroupDecoration"/>
-		<property name="GlobalUV" value="False" />
-		<property name="SwitchUV" value="False" />
-		<property name="Color" value="0.4823529,0.3490196,0.2901961"/>
-		<property name="Material" value="wood" />
-		<property name="PaintCost" value="1" />
-		<property name="Hidden" value="false" />
-	</paint>
+  <!-- id: the name for your new custom opaque texture -->
+  <!-- x/y: offset for the UVs to offset the texture start -->
+  <!-- w/h: width and height for how to paint the given textures, must not be zero! -->
+  <!-- blockw/blockh: width and height to influence paint preview?, must not be zero! -->
+  <opaque id="bark_pine_all_faces" texture="txName_bark_pine_all_faces" x="0" y="0" w="2" h="2" blockw="2" blockh="2">
+    <!-- Albedo/Diffuse texture is absolutely necessary, how else would you want to paint a block? -->
+    <property name="Diffuse" value="#@modfolder:Resources/Atlas.unity3d?assets/bark_pine_002_diffuse.jpg,assets/bark_pine_001_diffuse.jpg,assets/bark_pine_002_diffuse.jpg,assets/bark_pine_003_diffuse.jpg"/>
+    <!-- Normal texture is also a must, although you may provide a fully neutral one [rgb => 0.5, 0.5, 1] (translating to normal vector [0, 0, 1]) -->
+    <property name="Normal" value="#@modfolder:Resources/Atlas.unity3d?assets/bark_pine_002_normal.jpg,assets/bark_pine_001_normal.jpg,assets/bark_pine_002_normal.jpg,assets/bark_pine_003_normal.jpg"/>
+    <!-- Optional "Specular" texture is a packed textures, containing four different parameters for the shader, see explanation further below -->
+    <property name="Specular" value="#@modfolder:Resources/Atlas.unity3d?assets/bark_pine_002_pbr.png,assets/bark_pine_001_pbr.png,assets/bark_pine_002_pbr.png,assets/bark_pine_003_pbr.png"/>
+    <!-- How much paint it will cost users -->
+    <property name="PaintCost" value="1" />
+    <!-- Hide paint from options for users to choose -->
+    <!-- This flag does nothing in editor/creative mode -->
+    <property name="Hidden" value="false"/>
+    <!-- Disable for textures to rotate with block -->
+    <property name="GlobalUV" value="False"/>
+    <!-- Group for sorting paints in UI -->
+    <property name="Group" value="txGroupCustom"/>
+    <!-- Fine tune sorting withing groups -->
+    <property name="SortIndex" value="255"/>
+    <!-- not sure why vanilla has this!? -->
+    <!-- seems unused in vanilla configs -->
+    <property name="Material" value="wood" />
+    <!-- no idea what color property does, but it is parsed!? -->
+    <!-- code indicates something with particle system color -->
+    <property name="Color" value="0.48,0.35,0.29"/>
+    <!-- assuming this will mirror/switch the texture? -->
+    <!-- altough I can't seem to find it used anywhere! -->
+    <property name="SwitchUV" value="False"/>
+  </opaque>
 </append></configs>
 ```
 
-I can't really explain all the properties here, since they are
-mostly just passed through and I couldn't always figure out what
-they are intended to influence, but they match 1-to-1 the options
-that are normally set via the `uv.xml` fragment.
+#### High resolution opaque block textures
 
-To overwrite any existing texture in the atlas, you just need to
-define the id as the number of the texture ID you want overwritten:
-E.g. `<paint id="141" ... >` to overwrite `Garage Door 2` texture.
+Although the texture array only supports 512x512 textures, the game
+supports to have multiple textures to span over multiple blocks. This
+basically allows you to have 1k textures, which is how most block paints
+are in vanilla, or even bigger ones. To achieve this you have to split
+your bigger texture into 512x512 bits and setup the xml accordingly.
 
-`Config/blocks.xml`:
+In the example above 4 textures are used, so we need to set `w` and `h`
+to `2x2` repectively. Could also use `w="4" h=1"` for a different pattern.
+It seems that `blockw` and `blockh` should just be set to the same value.
+
+#### Reference custom textures in new/existing blocks
+
+To use custom textures in predefined blocks, use this syntax:
+
+`Config/blocks.xml`
 
 ```xml
 <block name="demo_block">
-	<property name="Texture" value="demo_terrain"/>
+  <property name="Texture" value="demo_terrain"/>
 </block>
 ```
+
+These blocks can then be used in your prefabs or to be built by users directly.
+This is much more efficient than creating new block meshes for your overhauls.
+
+#### Overwrite existing opaque block/paint textures
+
+To overwrite any existing texture in the atlas, you just need to
+define the id as the number of the texture ID you want overwritten:
+E.g. `<opaque id="65" ... >` to overwrite `Plywood` textures.
 
 ### Optional PBR Standard shader packing format
 
@@ -82,6 +118,12 @@ You can pack the source textures for these parameters via an image processor
 of your choice, or (recommended) via a channel packer script, e.g.:
 https://github.com/OCB7D2D/UnityTextureChannelPacker
 
+![Texture Channel Packer options](Screens/unity-channel-packer-01.png)
+
+This will create a "specular" texture that is a little bit metallic (R),
+recieves most of the ambient light (G), is non-emissive (B) and is only
+a tiny bit smooth/nearly fully rough (A).
+
 #### Note on the emission parameter (blue channel)
 
 While most regular shaders accept a dedicated RGB texture for the emission,
@@ -89,6 +131,49 @@ this shader only accepts a single channel (blue). It acts as a factor to
 included the regular albedo/diffuse texture regardless of lighting. If your
 source material has a distinct emission texture, you will need to mangle it
 with your albedo texture and mark the emissive parts in the blue channel.
+
+### Generate "specular" texture (Metallic/AO/Emission/Roughness)
+
+It's recommended to provide all three textures for an opaque block paint.
+This is most important for albedo and for the normal texture, although you
+may also use a uniform color texture for Albedo. Most material textures you
+find on the net will provide at least those two, but sometimes they're missing
+the Metallic, Roughness/Smoothness and/or Ambient Occlusion texture.
+
+Although you can use any image editor to create the combined channel texture,
+I highly recommend to use something like my [Texture Channel Packer][8] to
+ensure that the resulting image really contains the raw data in all channels.
+
+If you e.g. leave the "specular" texture blank, it will fallback to a 
+uniform black texture (0,0,0,1). This means the material rendering will
+be non-metallic, receives no ambient light, is non-emissive with maximum
+roughness. Although this still works, the value for AO is certainly too
+low, as most materials want to recieve at least some ambient lighting.
+
+![Ambient Occlusion Explained](Screens/ao-example.jpg)
+
+That's also the reason why most dumped "speculars" have a green tint.
+
+### Generate uniform textures on the fly in xml config
+
+As an experimental feature you can use a specific syntax to define uniform
+textures on the fly in your xml config. I don't really recommend doing it
+for production stuff, as you can easily create those textures also in unity
+and export them properly, to avoid any runtime overhead. But for experimenting
+it can be usefull if you want to play around with various material parameters.
+
+The following will produce a uniform opaque black texture:
+
+```xml
+<property name="Specular" value="512:512:0:0:0:1"/>
+```
+
+Example setting for a "specular" texture for a dull material:
+
+```xml
+<property name="Specular" value="512:512:0.05:0.8:0:0.975"/>
+```
+
 
 ## Custom grass/plant textures
 
@@ -99,7 +184,7 @@ an existing atlas, we first and foremost need to know what parts are already
 used and which parts are free to re-use. In the end I implemented a pretty
 sophisticated workflow to enable patching of such atlases.
 
-- Reading existing sub-textures from the atlas
+- Reading existing sub-textures from old atlas
 - Done by evaluating the existing XML UV mappings
 - All sub-textures are cut out from the existing atlas
 - Then we add the newly added sub-textures to that array
@@ -109,153 +194,26 @@ See https://github.com/OCB7D2D/OcbCustomTexturesPlants for more info
 
 ## Custom Terrain Textures
 
-Terrain textures seem to use an a two folded (and confusing approach).
-It seems even in vanilla you can't really add a snow block to a none
-snow biome (it will always look like the original terrain, e.g. topsoil).
-https://steamcommunity.com/app/251570/discussions/4/2264691750504420653/
+All custom terrain features will be moved to my new [MicroSplat core mod][7].  
+Note that at the time of writing this, that work hasn't been released yet.
 
-In order to properly use custom terrain texture you must have
-[SphereII's Legacy Distant Terrain][5] mod installed. It seems to
-disable the MicroSplat rendering for an older implementation.
+See https://github.com/OCB7D2D/OcbMicroSplat
 
-### Terrain MicroSplat Rendering
+## Further notes
 
-From what I gathered it seems that 7D2D uses [MicroSplat rendering][6] for the
-terrain, which is somehow Biome dependent (e.g. TopSoil look depends on Biome).
-Unfortunately I couldn't really figure out how one could even possibly influence
-this. And [SphereII's Legacy Distant Terrain][5] mod seems to solve all issues.
+Vanilla has two additional configs for paints:
 
-I know that MicroSplat rendering is using e.g. `TextureAtlas.diffuseTexture`,
-which is of type `Texture2DArray`. Unfortunately the highest asset rendition
-of the Map-Array is read-only protected, so I couldn't even alter it if I wanted.
-Funny enough the lower renditions (half/quarter) are readable, so I was able
-to do some tests, e.g. I can change textures for existing MicroSplat terrains.
+- string LockedByPerk;
+- ushort RequiredLevel;
 
-On the other hand, "legacy terrain" and as it seems the editor, use a legacy
-terrain atlas via e.g. `TextureAtlasTerrain.diffuse`. By Patching the function
-`GameManager.IsSplatMapAvailable` to always return false, I was able to bring the
-custom terrain textures to show, but then distant terrain wouldn't render anymore.
+These seem implemented fully, but unused for now!
 
-### XML Config For Custom Terrains
-
-`Config/painting.xml`:
-
-```xml
-<configs><append xpath="/paints">
-	<terrain id="demo_terrain">
-		<property name="Diffuse" value="#@modfolder:Resources/Atlas.unity3d?assets/bark_pine_002_diffuse.jpg"/>
-		<property name="Normal" value="#@modfolder:Resources/Atlas.unity3d?assets/bark_pine_002_normal.jpg"/>
-		<property name="Color" value="0.2588235,0.2705882,0.1921569" />
-		<property name="SwitchUV" value="True" />
-		<property name="GlobalUV" value="False" />
-		<property name="Material" value="dirt" />
-	</terrain >
-</append></configs>
-```
-
-I can't really explain all the properties here, since they are
-mostly just passed through and I couldn't always figure out what
-they are intended to influence, but they match 1-to-1 the options
-that are normally set via the `uv.xml` fragment.
-
-`Config/blocks.xml`:
-
-```xml
-<block name="demo_terrain">
-	<property name="Shape" value="Terrain"/>
-	<property name="Mesh" value="terrain"/>
-	<property name="Texture" value="demo_terrain"/>
-</block>
-```
-
-### MicroSplat Terrain Blending
-
-Even though I haven't been able to crack to add really new textures to the current
-MicroSplat terrain rendering shader, I still got something working that at least
-allows to create additional slightly distinct variations from the existing terrain
-textures. MicroSplat can blend between multiple terrain textures, not just two.
-
-```xml
-<block name="terrOreCustom">
-	<!-- Important to give it this class to parse new properts -->
-	<!-- we could do it more agnostic, but this performs better -->
-	<property name="Class" value="CustomTerrain, CustomTextures"/>
-	<!-- this is the fallback texture, e.g. some preview will be -->
-	<!-- rendered with this single texture. Also if you have the -->
-	<!-- legacy distant terrain mod enabled, this texture will be -->
-	<!-- used. This feature is meant to be used with SplatMap. -->
-	<!-- Although you may hockup a new texture to support both -->
-	<property name="Texture" value="demo_terrain"/>
-	<!-- Determines how the preview looks when placing? -->
-	<!-- Not sure yet how this relates to texture indexes? -->
-	<property name="TerrainIndex" value="9"/>
-	<!-- Main setting needed to enable custom terrain blends -->
-	<!-- It seems this is the main knob the tell micro splat -->
-	<!-- to also sample additional texture for the final result -->
-	<property name="TerrainBlend" value="1.0"/>
-	<!-- Below are the blend settings -->
-	<!-- Most times you want 2 or 3 blends -->
-	<!-- Some combinations work ok, some work badly -->
-	<!-- You'll need to figure out a combo that fits -->
-	<!-- Number in the comment is the MicroSplat array index -->
-	<property name="BlendDirt" value="0.0"/> <!-- 13 -->
-	<property name="BlendGravel" value="0.2"/> <!-- 14 -->
-	<property name="BlendOreCoal" value="1.0"/> <!-- 15 -->
-	<property name="BlendAsphalt" value="0.0"/> <!-- 16 -->
-	<property name="BlendOreIron" value="0.0"/> <!-- 17 -->
-	<property name="BlendOreNitrate" value="0.8"/> <!-- 18 -->
-	<property name="BlendOreOil" value="0.0"/> <!-- 21 -->
-	<property name="BlendOreLead" value="0.4"/> <!-- 22 -->
-	<property name="BlendStoneDesert" value="0.0"/> <!-- 20 -->
-	<property name="BlendStoneRegular" value="0.0"/> <!-- 19 -->
-	<property name="BlendStoneDestroyed" value="0.0"/> <!-- 23 -->
-	<!-- Further Additional terrain block settings ... -->
-	<property name="Material" value="Mdirt"/>
-	<property name="Shape" value="Terrain"/>
-	<property name="Mesh" value="terrain"/>
-</block>
-```
-
-Mileage may vary what you can achieve with certain combinations and I'm not
-even really sure myself how it all works. I only know that this exposes all the
-low-level settings that go directly into the SplatMap shader. It might be good
-enough for most people to create additional ores or terrains. But you'll need
-to go through the trail and error process yourself :)
-
-### MicroSplat Texture Replacing
-
-As already stated, one can't really add more texture the the MicroSplat terrain
-shader. But one may still want to replace existing textures. And luckily one
-of the A20 terrain textures seems unused (index 20) and can be used to at least
-bring one additional MicroSplat terrain texture into the world. Note that you
-can also use this slot (BlendStoneDesert) for terrain blends with other textures.
-
-```xml
-<append xpath="/paints">
-	<microsplat index="20">
-		<property name="Diffuse" value="#@modfolder:Resources/Terrain.unity3d?assets/4k.diffuse.jpg"/>
-		<property name="Normal" value="#@modfolder:Resources/Terrain.unity3d?assets/4k.normal.jpg"/>
-	</microsplat>
-</append>
-```
-
-Note that the index must be valid (0-23), you can't extend the existing Texture2DArray!!
-
-## Custom Grass Textures
-
-Grass textures use a "true texture atlas", which is IMO normally just
-one big texture/image where each block just uses a small rectangle
-of that atlas (via UV coordinates). I believe the different ways
-texture atlases are handled now, has simply historically grown. We can
-certainly also extend this big atlas texture by blitting new textures
-into the existing atlas texture (and setting the UVs correctly). At
-some point we even would need to grow the original texture. This all
-seems feasible, but probably a lot of tedious work to get it right.
-Reminds me of some work I've done years ago to create web-sprites.
-
-See https://github.com/OCB7D2D/OcbCustomTexturesPlants
 
 ## Changelog
+
+### Version 0.6.0
+
+- Update compatibility for 7D2D A21.1(b6)
 
 ### Version 0.5.0
 
@@ -298,7 +256,7 @@ See https://github.com/OCB7D2D/OcbCustomTexturesPlants
 
 ## Compatibility
 
-I've developed and tested this Mod against version a20.3(b3).
+Developed initially for version a20.3(b3), updated through A21.0(b313).
 
 [1]: https://docs.unity3d.com/ScriptReference/Texture2DArray.html
 [2]: https://www.khronos.org/opengl/wiki/Array_Texture
@@ -306,3 +264,5 @@ I've developed and tested this Mod against version a20.3(b3).
 [4]: https://github.com/OCB7D2D/OcbCustomTexturesDemo
 [5]: https://gitlab.com/sphereii/SphereII-Mods/-/archive/master/SphereII-Mods-master.zip?path=SphereII%20Legacy%20Distant%20Terrain
 [6]: https://assetstore.unity.com/packages/tools/terrain/microsplat-96478
+[7]: https://github.com/OCB7D2D/OcbMicroSplat
+[8]: https://github.com/OCB7D2D/UnityTextureChannelPacker

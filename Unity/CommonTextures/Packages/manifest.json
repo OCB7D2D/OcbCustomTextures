@@ -1,0 +1,12 @@
+{
+  "dependencies": {
+    "ch.ocbnet.unityassetexporter": "https://github.com/OCB7D2D/UnityAssetExporter.git#upm@master",
+    "com.unity.ide.rider": "3.0.18",
+    "com.unity.ide.visualstudio": "2.0.17",
+    "com.unity.ide.vscode": "1.2.5",
+    "com.unity.modules.assetbundle": "1.0.0",
+    "com.unity.modules.audio": "1.0.0",
+    "com.unity.modules.physics": "1.0.0",
+    "com.unity.modules.screencapture": "1.0.0"
+  }
+}

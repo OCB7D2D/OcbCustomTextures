@@ -75,6 +75,12 @@
     <Reference Include="UnityEngine.AudioModule">
       <HintPath>$(PATH_7D2D_MANAGED)\UnityEngine.AudioModule.dll</HintPath>
     </Reference>
+    <Reference Include="Unity.Addressables">
+      <HintPath>$(PATH_7D2D_MANAGED)\Unity.Addressables.dll</HintPath>
+    </Reference>
+    <Reference Include="Unity.ResourceManager">
+      <HintPath>$(PATH_7D2D_MANAGED)\Unity.ResourceManager.dll</HintPath>
+    </Reference>
     <Reference Include="UnityEngine.CoreModule">
       <HintPath>$(PATH_7D2D_MANAGED)\UnityEngine.CoreModule.dll</HintPath>
     </Reference>
@@ -83,14 +89,21 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Library\BlockCustomTerrain.cs" />
+    <Compile Include="Harmony\GrassTextures.cs" />
+    <Compile Include="Harmony\OpaqueTextures.cs" />
+    <Compile Include="Utils\HarmonyFieldProxy.cs" />
+    <Compile Include="Utils\HarmonyPropertyProxy.cs" />
+    <Compile Include="Utils\OcbTextureDumper.cs" />
+    <Compile Include="Utils\OcbTextureUtils.cs" />
     <Compile Include="Library\CustomTexturesCmd.cs" />
     <Compile Include="Harmony\CustomTextures.cs" />
     <Compile Include="Library\HelperGrassTextures.cs" />
-    <Compile Include="Library\TextureAtlasUtils.cs" />
     <Compile Include="Library\TextureConfig.cs" />
     <Compile Include="Library\TextureAssetUrl.cs" />
-    <Compile Include="Library\TextureUtils.cs" />
+    <Compile Include="TilingTools\TilingArea.cs" />
+    <Compile Include="TilingTools\TilingTexture.cs" />
+    <Compile Include="TilingTools\TilingAtlas.cs" />
+    <Compile Include="TilingTools\TilingSource.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="ModInfo.xml" />

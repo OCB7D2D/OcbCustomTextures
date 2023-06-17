@@ -1,7 +1,10 @@
 ﻿using System.Collections;
 using System.IO;
 using UnityEngine;
-using static OCB.TextureUtils;
+
+// ####################################################################
+// Haven't been tested rencently with A21, so use with caution
+// ####################################################################
 
 public class HelperGrassTextures
 {
@@ -28,6 +31,15 @@ public class HelperGrassTextures
         return true;
     }
 
+
+    static public Texture2D LoadTexture(string path)
+    {
+        var data = File.ReadAllBytes(path);
+        var tex = new Texture2D(2, 2);
+        tex.LoadImage(data);
+        return tex;
+    }
+
     public static void DynamicGrassPatcher(string path, int x, int y)
     {
 
@@ -41,7 +53,6 @@ public class HelperGrassTextures
         System.DateTime nmt2 = File.GetLastWriteTime($"{path}.normal.png");
         System.DateTime nmt3 = File.GetLastWriteTime($"{path}.aost.png");
 
-        // 5 4
         x = 580 * x + 34;
         y = 580 * y + 34;
 
@@ -138,7 +149,7 @@ public class HelperGrassTextures
         if (do3 || all)
         {
             Log.Out("Reloading Specular");
-            var new_spec = LoadTexture($"{ path}.aost.png");
+            var new_spec = LoadTexture($"{path}.aost.png");
             // var t2s = grass.TexSpecular as Texture2D;
             // DumpTexure2D(t2s, "Mods/OcbCustomTextures/org-grass-spec-atlas.png");
             // Texture2D spec_atlas = new Texture2D(8192, 8192, t2s.format, false);
@@ -182,7 +193,7 @@ public class HelperGrassTextures
         }
 
 
-        grass.ReloadTextureArrays(false);
+        // grass.ReloadTextureArrays(false);
 
         grass.material.SetTexture("_Albedo", grass.textureAtlas.diffuseTexture);
         grass.material.SetTexture("_Normal", grass.textureAtlas.normalTexture);
