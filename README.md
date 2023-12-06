@@ -18,6 +18,24 @@ You achieve this with correct texture settings in unity.
 
 ![Unity texture settings](Screens/unity-paint-texture-settings.png)
 
+Make sure exported textures are in the following texture formats (512x512):
+
+- Diffuse in DXT1 (BC1) => RBG 565 format (no alpha channel)
+- Normals in DXTnm => using green (6 bit) and alpha (8 bit) channel
+- "Specular" (MOER) in DXT5 (BC3) => RGBA 5658 format (4 channel texture)
+
+Note: In case you are supplying a texture for "specular" with a fully
+opaque alpha channel, unity may decide to use DXT1 (BC1) as the proper
+export texture format. This will not be compatible with the expected
+texture format of DXT5 (BC3) and will result in `CopyTexture` errors.
+You can either use a nearly opaque alpha/roughness channel (254), or
+alternatively force the export format via:
+
+![Overrule specular export settings](Screens/unity-export-overrule-specular.png)
+
+For the diffuse to automatically take the right export format, it should
+be enough to disable the transparency via "Alpha Source None" (as shown).
+
 You can use [AssetStudio][3] to check the exported `unity3d`
 resource to see the format of your textures. If the formats
 are not correct, the code will either outright reject your
@@ -121,7 +139,7 @@ https://github.com/OCB7D2D/UnityTextureChannelPacker
 ![Texture Channel Packer options](Screens/unity-channel-packer-01.png)
 
 This will create a "specular" texture that is a little bit metallic (R),
-recieves most of the ambient light (G), is non-emissive (B) and is only
+receives most of the ambient light (G), is non-emissive (B) and is only
 a tiny bit smooth/nearly fully rough (A).
 
 #### Note on the emission parameter (blue channel)
