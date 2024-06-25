@@ -161,7 +161,7 @@ public static class OpaqueTextures
         {
             var codes = new List<CodeInstruction>(instructions);
             // Execute our static function to do our thing
-            codes.Insert(codes.Count - 2, CodeInstruction.Call(
+            codes.Insert(codes.Count - 1, CodeInstruction.Call(
                 typeof(OpaqueTextures), "InitOpaqueConfig"));
             // Return new IL codes
             return codes;
@@ -195,10 +195,10 @@ public static class OpaqueTextures
         var diff2Dcpy = ApplyDiffuseTextures(diff2Darr, cmds);
         var norm2Dcpy = ApplyNormalTextures(norm2Darr, cmds);
         var spec2Dcpy = ApplySpecularTexture(spec2Darr, cmds);
-        var old = QualitySettings.masterTextureLimit;
-        QualitySettings.masterTextureLimit = 0;
+        var old = QualitySettings.globalTextureMipmapLimit;
+        QualitySettings.globalTextureMipmapLimit = 0;
         Graphics.ExecuteCommandBufferAsync(cmds, ComputeQueueType.Default);
-        QualitySettings.masterTextureLimit = old;
+        QualitySettings.globalTextureMipmapLimit = old;
         // Post patch, since our xml config is loaded too late
         OcbCustomTextures.ReleaseTexture(diff2Darr, diff2Dcpy);
         opaque.TexDiffuse = atlas.diffuseTexture = diff2Dcpy;

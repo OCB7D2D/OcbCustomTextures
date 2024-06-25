@@ -1,12 +1,22 @@
-# OCB Core Mod for Custom Texture Atlas  - 7 Days to Die (A21) Addon
+# OCB Core Mod for Custom Texture Atlas  - 7 Days to Die (V1.0 exp) Addon
 
 This mod doesn't do much on it's own, but it allows other mods to
 add custom (opaque) block paints and grass/plant textures.
 
 See demo mods some sample configs and resources!
 
-- https://github.com/OCB7D2D/OcbCustomTexturesDemo
+- https://github.com/OCB7D2D/OcbCustomTexturesPaints
 - https://github.com/OCB7D2D/OcbCustomTexturesPlants
+
+[![GitHub CI Compile Status][10]][9]
+
+### Download and Install
+
+End-Users are encouraged to download my mods from [NexusMods][11].  
+Every download there helps me to buy stuff for mod development.
+
+Otherwise please use one of the [official releases][12] here.  
+Only clone or download the repo if you know what you do!
 
 ## Custom Block Paints
 
@@ -226,8 +236,11 @@ Vanilla has two additional configs for paints:
 
 These seem implemented fully, but unused for now!
 
-
 ## Changelog
+
+### Version 0.7.0
+
+- Update compatibility for 7D2D V1.0 (exp)
 
 ### Version 0.6.0
 
@@ -272,15 +285,15 @@ These seem implemented fully, but unused for now!
 
 - Initial version
 
-## Compatibility
-
-Developed initially for version a20.3(b3), updated through A21.0(b313).
-
 [1]: https://docs.unity3d.com/ScriptReference/Texture2DArray.html
 [2]: https://www.khronos.org/opengl/wiki/Array_Texture
 [3]: https://github.com/Perfare/AssetStudio
-[4]: https://github.com/OCB7D2D/OcbCustomTexturesDemo
+[4]: https://github.com/OCB7D2D/OcbCustomTexturesPaints
 [5]: https://gitlab.com/sphereii/SphereII-Mods/-/archive/master/SphereII-Mods-master.zip?path=SphereII%20Legacy%20Distant%20Terrain
 [6]: https://assetstore.unity.com/packages/tools/terrain/microsplat-96478
-[7]: https://github.com/OCB7D2D/OcbMicroSplat
+[7]: https://github.com/OCB7D2D/OcbMicroOcbCustomTexturesSplat
 [8]: https://github.com/OCB7D2D/UnityTextureChannelPacker
+[9]: https://github.com/OCB7D2D/OcbCustomTextures/actions/workflows/ci.yml
+[10]: https://github.com/OCB7D2D/OcbCustomTextures/actions/workflows/ci.yml/badge.svg
+[11]: https://www.nexusmods.com/7daystodie/mods/2788
+[12]: https://github.com/OCB7D2D/OcbCustomTextures/releases

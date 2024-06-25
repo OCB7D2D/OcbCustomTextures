@@ -10,7 +10,7 @@ public class CustomTexturesCmd : ConsoleCmdAbstract
     // ####################################################################
 
     private static string info = "CustomTextures";
-    protected override string[] getCommands()
+    public override string[] getCommands()
     {
         return new string[2] { info, "ct" };
     }
@@ -18,9 +18,9 @@ public class CustomTexturesCmd : ConsoleCmdAbstract
     public override bool IsExecuteOnClient => true;
     public override bool AllowedInMainMenu => true;
 
-    protected override string getDescription() => "Custom Textures";
+    public override string getDescription() => "Custom Textures";
 
-    protected override string getHelp() => "Custom Textures\n";
+    public override string getHelp() => "Custom Textures\n";
 
     // ####################################################################
     // ####################################################################
@@ -39,8 +39,6 @@ public class CustomTexturesCmd : ConsoleCmdAbstract
                 return MeshDescription.meshes[MeshDescription.MESH_MODELS];
             case "transparent":
                 return MeshDescription.meshes[MeshDescription.MESH_TRANSPARENT];
-            case "cutout":
-                return MeshDescription.meshes[MeshDescription.MESH_CUTOUT];
             case "water":
                 return MeshDescription.meshes[MeshDescription.MESH_WATER];
             case "decals":

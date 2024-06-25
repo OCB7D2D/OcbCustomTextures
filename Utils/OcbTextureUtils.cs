@@ -43,18 +43,18 @@ public static class OcbTextureUtils
         readonly float mipSlope = 0.6776996f;
         public ResetQualitySettings()
         {
-            masterTextureLimit = QualitySettings.masterTextureLimit;
+            masterTextureLimit = QualitySettings.globalTextureMipmapLimit;
             streamingMips = QualitySettings.streamingMipmapsActive;
             mipmapsReduction = QualitySettings.streamingMipmapsMaxLevelReduction;
             mipSlope = Shader.GetGlobalFloat("_MipSlope");
-            QualitySettings.masterTextureLimit = 0;
+            QualitySettings.globalTextureMipmapLimit = 0;
             QualitySettings.streamingMipmapsActive = false;
             QualitySettings.streamingMipmapsMaxLevelReduction = 0;
             Shader.SetGlobalFloat("_MipSlope", 0.6776996f);
         }
         public void Dispose()
         {
-            QualitySettings.masterTextureLimit = masterTextureLimit;
+            QualitySettings.globalTextureMipmapLimit = masterTextureLimit;
             QualitySettings.streamingMipmapsActive = streamingMips;
             QualitySettings.streamingMipmapsMaxLevelReduction = mipmapsReduction;
             Shader.SetGlobalFloat("_MipSlope", mipSlope);

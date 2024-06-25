@@ -12,13 +12,40 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b9aafab5ec24e3a468cbf65f5c7e23b0, type: 3}
   m_Name: AssetBundle
   m_EditorClassIdentifier: 
-  Path: ..\..\Resources\Grass.unity3d
+  Path: ..\..\..\Resources\Grass.unity3d
   IncludeAssetsFromFolders: 0
   SearchFoldersRecursively: 0
   CreateDeterministicAssetBundle: 1
   AppendHashToAssetBundleName: 1
   Compression: 1
   VerboseLogging: 0
+  ShowPlatformTargets: 0
+  StandaloneWindows: 1
+  StandaloneMacOSX: 0
+  StandaloneLinux: 0
+  StripRedundantAPIs: 1
+  WantD3D11: 1
+  WantOpenGL: 1
+  WantVulkan: 1
+  WantMetal: 1
+  SeparateShaders: 0
+  ShowShaderStripping: 0
+  StripMetaPass: 0
+  StripForwardBasePass: 0
+  StripForwardAddPass: 0
+  StripDeferredPass: 0
+  StripShadowCasterPass: 0
+  StripFogNone: 0
+  StripFogLinear: 1
+  StripFogExp: 0
+  StripFogExp2: 1
+  StripInstancing: 0
+  StripLightmapPlain: 1
+  StripLightmapDirCombined: 1
+  StripLightmapDynamicPlain: 1
+  StripLightmapDynamicDirCombined: 1
+  StripLightmapShadowMask: 1
+  StripLightmapSubtractive: 1
   Objects:
   - {fileID: 2800000, guid: 62739644c1e172a44967470c399501c0, type: 3}
   - {fileID: 2800000, guid: f5f379dbb9e703c45baf232fb0ca4856, type: 3}
