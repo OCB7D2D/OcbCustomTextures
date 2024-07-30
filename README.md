@@ -241,6 +241,7 @@ These seem implemented fully, but unused for now!
 ### Version 0.7.0
 
 - Update compatibility for 7D2D V1.0 (exp)
+- Verified compatibility with V1 stable (b333)
 
 ### Version 0.6.0
 
