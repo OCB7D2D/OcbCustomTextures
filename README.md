@@ -238,6 +238,10 @@ These seem implemented fully, but unused for now!
 
 ## Changelog
 
+### Version 0.8.0
+
+- Update for 7D2D V2.0 exp (b285)
+
 ### Version 0.7.2
 
 - Recompile for 7D2D V1.2 stable
