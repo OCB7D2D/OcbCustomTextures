@@ -1,4 +1,4 @@
-# OCB Core Mod for Custom Texture Atlas  - 7 Days to Die (V1.0 exp) Addon
+# OCB Core Mod for Custom Texture Atlas  - 7 Days to Die (V2.1) Addon
 
 This mod doesn't do much on it's own, but it allows other mods to
 add custom (opaque) block paints and grass/plant textures.
