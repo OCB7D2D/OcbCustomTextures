@@ -56,17 +56,85 @@ public static class OpaqueTextures
     public class BlockTexturesFromXMLCreateBlockTexturesPrefix
     {
         public static void Prefix(XmlFile _xmlFile)
-            => ParseOpaqueConfig(_xmlFile.XmlDoc.Root);
+        {
+            ParseOpaqueConfig(_xmlFile.XmlDoc.Root);
+            // Pre-size BlockTextureData.list BEFORE any chunk
+            // deserialization can access high paint IDs from saved
+            // data. Without this, reloading a save built against a
+            // larger texture set than the current process can fit
+            // throws IndexOutOfRange from the chunk-paint accessor.
+            EarlyResizeBlockTextureList();
+        }
     }
 
-    // ####################################################################
-    // ####################################################################
+    static void EarlyResizeBlockTextureList()
+    {
+        // Generous floor: covers the existing vanilla range plus a
+        // sensible margin so a paint pack with several hundred
+        // entries doesn't trigger a resize during config-load. The
+        // GetFreePaintID safety net below grows the array further
+        // on demand if a config truly exceeds this.
+        const int minSize = 1024;
+        if (BlockTextureData.list == null)
+        {
+            BlockTextureData.list = new BlockTextureData[minSize];
+            Log.Out("[OcbCustomTextures] Created BlockTextureData.list (was null) size={0}", minSize);
+            return;
+        }
+        var required = System.Math.Max(minSize, 512 + OpaqueConfigs.Count + 256);
+        if (BlockTextureData.list.Length < required)
+        {
+            var oldLen = BlockTextureData.list.Length;
+            Array.Resize(ref BlockTextureData.list, required);
+            Log.Out("[OcbCustomTextures] Pre-resized BlockTextureData.list {0} -> {1} (save reload protection)",
+                oldLen, required);
+        }
+    }
+
+    // Safety net: if any code path tries to access
+    // BlockTextureData.list with an index >= Length, auto-grow.
+    // Catches chunk deserialization that runs before InitOpaqueConfig
+    // has a chance to size the array. No-op for the common case
+    // where the array is already large enough.
+
+    [HarmonyPatch(typeof(BlockTextureData), nameof(BlockTextureData.Init))]
+    static class BlockTextureDataInitPatch
+    {
+        static bool Prefix(BlockTextureData __instance)
+        {
+            if (BlockTextureData.list == null)
+            {
+                BlockTextureData.list = new BlockTextureData[System.Math.Max(1024, __instance.ID + 256)];
+                Log.Out("[OcbCustomTextures] Created BlockTextureData.list on-demand for ID {0}, size={1}",
+                    __instance.ID, BlockTextureData.list.Length);
+                return true;
+            }
+            if (__instance.ID >= BlockTextureData.list.Length)
+            {
+                var oldLen = BlockTextureData.list.Length;
+                var newLen = System.Math.Max(1024, (((__instance.ID + 1) / 256) + 1) * 256);
+                Array.Resize(ref BlockTextureData.list, newLen);
+                Log.Out("[OcbCustomTextures] Safety resize for ID {0}: {1} -> {2}",
+                    __instance.ID, oldLen, newLen);
+            }
+            return true; // continue with original Init
+        }
+    }
 
     static int GetFreePaintID()
     {
         for (var i = 0; i < BlockTextureData.list.Length; i++)
             if (BlockTextureData.list[i] == null) return i;
-        throw new Exception("No more free Paint IDs");
+        // Was: throw new Exception("No more free Paint IDs"). Grow the
+        // backing array instead so a paint pack with more entries than
+        // the current capacity registers cleanly. This only fires when
+        // the array is genuinely full, so vanilla-sized configs never
+        // hit it.
+        var oldLen = BlockTextureData.list.Length;
+        Array.Resize(ref BlockTextureData.list, oldLen + 256);
+        Log.Out("[OcbCustomTextures] BlockTextureData.list grown {0} -> {1} to make room for new paint",
+            oldLen, BlockTextureData.list.Length);
+        return oldLen;
     }
 
     private static ushort PatchAtlasBlocks(MeshDescription mesh, TextureConfig tex)
@@ -100,7 +168,30 @@ public static class OpaqueTextures
         var opaqueAtlas = opaque.textureAtlas as TextureAtlasBlocks;
         if (builtinOpaques == -1 && opaqueAtlas.diffuseTexture != null)
             builtinOpaques = (opaqueAtlas.diffuseTexture as Texture2DArray).depth;
+        // Dedicated server has no GPU atlas, so the diffuse texture
+        // check above never resolves a depth. Treating that as -1 falls
+        // through to incorrect ID assignment downstream; clamp to 0 so
+        // the headless install runs cleanly. tiling.index is a render
+        // concern, so leaving it 0 on server is fine.
+        if (builtinOpaques == -1)
+        {
+            builtinOpaques = 0;
+            Log.Out("[OcbCustomTextures] Dedicated server: no diffuse texture, builtinOpaques clamped to 0");
+        }
         var textures = OpaqueConfigs.Values.ToList();
+        // Pre-resize BlockTextureData.list to fit the about-to-be-
+        // assigned paint IDs. Grows in 256-slot blocks so a small
+        // config gets a small bump and a large pack doesn't trigger
+        // a resize per registered paint.
+        var idFloor = System.Math.Max(builtinOpaques, 512);
+        var required = idFloor + textures.Count + 1;
+        if (BlockTextureData.list != null && required > BlockTextureData.list.Length)
+        {
+            var oldLen2 = BlockTextureData.list.Length;
+            var newLen2 = ((required / 256) + 1) * 256;
+            Array.Resize(ref BlockTextureData.list, newLen2);
+            Log.Out("[OcbCustomTextures] Pre-resized BlockTextureData.list {0} -> {1}", oldLen2, newLen2);
+        }
         if (opaque == null) throw new Exception("MESH MISSING");
         var atlas = opaque.textureAtlas as TextureAtlasBlocks;
         if (atlas == null) throw new Exception("INVALID ATLAS TYPE");
@@ -309,8 +400,13 @@ public static class OpaqueTextures
         if (OpaquesAdded == 0) return texture;
         if (GameManager.IsDedicatedServer) return texture;
         if (!texture.name.StartsWith("ta_opaque")) return texture;
+        // Was: texture.depth + OpaquesAdded. That undersizes the
+        // atlas whenever builtinOpaques > texture.depth (e.g. when the
+        // initial texture was allocated against an older atlas size).
+        // Max() keeps the original behavior in the common case where
+        // texture.depth >= builtinOpaques.
         var copy = ResizeTextureArray(cmds, texture,
-            texture.depth + OpaquesAdded, true, true);
+            System.Math.Max(texture.depth, builtinOpaques) + OpaquesAdded, true, true);
         foreach (TextureConfig cfg in OpaqueConfigs.Values)
             for (int i = 0; i < cfg.Length; i += 1)
                 PatchTextures(cmds, copy, lookup(cfg), cfg.tiling, i, fallback);

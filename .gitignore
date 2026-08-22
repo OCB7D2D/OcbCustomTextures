@@ -1,3 +1,4 @@
 /build
 /.vs
 *.pdb
+/.managed-3.0

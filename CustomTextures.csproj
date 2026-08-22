@@ -45,6 +45,9 @@
     <Reference Include="Assembly-CSharp">
       <HintPath>$(PATH_7D2D_MANAGED)\Assembly-CSharp.dll</HintPath>
     </Reference>
+    <Reference Include="netstandard">
+      <HintPath>$(PATH_7D2D_MANAGED)\netstandard.dll</HintPath>
+    </Reference>
     <Reference Include="LogLibrary">
       <HintPath>$(PATH_7D2D_MANAGED)\LogLibrary.dll</HintPath>
     </Reference>

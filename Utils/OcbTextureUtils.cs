@@ -224,17 +224,37 @@ public static class OcbTextureUtils
         Texture src, int srcidx = 0)
     {
         var offset = GetMipMapOffset();
+        // Cap iteration at whichever is smaller: dst's full mip count, or
+        // src's available mips above the quality offset. The original
+        // implementation walked dst.mipmapCount unconditionally, which is
+        // fine when src is the same size or larger (the "2k into 1k" case
+        // the offset is designed for) but EXPLODES when src is smaller
+        // than dst ~ e.g. a 128×128 paint texture (8 mips, levels 0-7)
+        // being copied into a 1024+ atlas slot (11+ mips). The loop would
+        // ask src for mips 8, 9, 10, none of which exist, and Unity logs
+        //   ERR Graphics.CopyTexture called with invalid source mip level
+        //   (got 8, have 8 mips)
+        // for every iteration past the source's last mip. That floods the
+        // console at chunk paint time, especially when third-party paint
+        // mods (e.g. PyroPaints, "CK Textures N Paints") ship small paint
+        // textures that get patched into bigger atlas slots through here.
+        // Capping leaves the destination's smallest mip levels unwritten;
+        // those mips only matter at extreme view distance and the
+        // existing destination contents (vanilla or prior swap) are kept.
+        int maxMips = Math.Min(dst.mipmapCount, src.mipmapCount - offset);
+        if (maxMips <= 0) return; // Source has nothing usable at this quality
+
         // Copy all mips individually, could optimize ideal case
         // Given that we don't do this often, not much to gain
         if (dst.isReadable && src.isReadable)
         {
-            for (int m = 0; m < dst.mipmapCount; m++)
+            for (int m = 0; m < maxMips; m++)
                 SetPixelData(GetPixelData(src, srcidx, offset + m), dst, dstidx, m);
             ApplyPixelData(dst, false, false);
         }
         else
         {
-            for (int m = 0; m < dst.mipmapCount; m++) cmds.
+            for (int m = 0; m < maxMips; m++) cmds.
                 CopyTexture(src, srcidx, m + offset, dst, dstidx, m);
         }
     }

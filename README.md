@@ -238,6 +238,10 @@ These seem implemented fully, but unused for now!
 
 ## Changelog
 
+### Unreleased
+
+- Rebuild for 7D2D V3.0 "Dead Hot Summer". No source changes to the texture-atlas API were needed. Added a `netstandard` reference so the project builds without a globally-installed .NET Framework 4.8 Developer Pack.
+
 ### Version 0.8.0
 
 - Update for 7D2D V2.0 exp (b285)
