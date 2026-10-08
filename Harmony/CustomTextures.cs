@@ -128,7 +128,9 @@ public class OcbCustomTextures : IModApi
     [HarmonyPatch(typeof(MeshDescription), "Unload")]
     static class MeshDescriptionUnload
     {
-        static bool Prefix(Texture tex)
+        // 7DTD 3.2 port: MeshDescription.Unload is now Unload(ref Texture tex). Declared by ref to match
+        // the target's signature exactly; this prefix only reads it.
+        static bool Prefix(ref Texture tex)
         {
             if (tex == null) return true;
             return !tex.name.StartsWith("extended_");
